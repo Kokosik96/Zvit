@@ -198,6 +198,17 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <button class="btn sec" onclick="dlgSet.close()">Закрити</button>
 </dialog>
 
+<dialog id="dlg-stock">
+  <h2 style="margin-top:0">Редагувати позицію</h2>
+  <label>Назва</label><input id="e-name">
+  <div class="row">
+    <div><label>К-сть</label><input id="e-qty" type="number" min="0" inputmode="numeric"></div>
+  </div>
+  <div id="e-sn-wrap"><label>Серійний номер</label><input id="e-sn" style="font-family:var(--mono)"></div>
+  <button class="btn" onclick="saveStockEdit()">Зберегти</button>
+  <button class="btn sec" onclick="dlgStock.close()">Скасувати</button>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -292,6 +303,36 @@ function delStock(kind,id){
   if(!confirm('Видалити «'+it.name+'» зі складу?'))return;
   S[kind]=S[kind].filter(i=>i.id!==id);save();renderStock();fillSelects();
 }
+let editStockRef=null;
+const dlgStock=document.getElementById('dlg-stock');
+function editStock(kind,id){
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  editStockRef={kind,id};
+  document.getElementById('e-name').value=it.name;
+  document.getElementById('e-qty').value=it.qty;
+  document.getElementById('e-sn').value=it.sn||'';
+  document.getElementById('e-sn-wrap').style.display=kind==='gear'?'block':'none';
+  dlgStock.showModal();
+}
+function saveStockEdit(){
+  if(!editStockRef)return;
+  const{kind,id}=editStockRef;
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  const n=document.getElementById('e-name').value.trim();
+  if(!n){toast('Назва не може бути порожньою');return;}
+  const oldName=it.name;
+  it.name=n;
+  it.qty=Math.max(0,parseInt(document.getElementById('e-qty').value)||0);
+  if(kind==='gear'){const sn=document.getElementById('e-sn').value.trim();if(sn)it.sn=sn;else delete it.sn;}
+  // оновлюємо назву в минулих вильотах, щоб звіти лишались коректними
+  if(oldName!==n){
+    S.flights.forEach(f=>{
+      if(kind==='drones'&&f.droneId===id)f.droneName=n;
+      if(kind==='ammo'&&f.ammoId===id)f.ammoName=n;
+    });
+  }
+  save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
+}
 function renderStock(){
   const arr=S[stockKind];const el=document.getElementById('stock-list');
   if(!arr.length){el.innerHTML='<div class="empty">Порожньо. Додай перший запис ↑</div>';return;}
@@ -300,6 +341,7 @@ function renderStock(){
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
     <div class="qty ${i.qty===0?'zero':''}">${i.qty}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
+    <button class="del" style="color:var(--muted)" onclick="editStock('${stockKind}','${i.id}')">✎</button>
     <button class="del" onclick="delStock('${stockKind}','${i.id}')">✕</button>
   </div>`).join('');
 }
@@ -462,14 +504,17 @@ function renderReport(){
   const t=buildReport(date);
   const el=document.getElementById('r-out');
   if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
-  el.innerHTML=`<div class="report" id="r-text"></div>
-    <button class="btn" onclick="copyText(document.getElementById('r-text').textContent)">📋 Скопіювати звіт</button>
+  el.innerHTML=`<textarea class="report" id="r-text" style="width:100%;min-height:120px"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('r-text').value)">📋 Скопіювати звіт</button>
     <button class="btn sec" onclick="shareReport()">↗ Поділитися (месенджер)</button>
-    <p class="note">Скопіюй і встав у Signal/месенджер командиру.</p>`;
-  document.getElementById('r-text').textContent=t;
+    <p class="note">Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».</p>`;
+  const ta=document.getElementById('r-text');
+  ta.value=t;
+  const fit=()=>{ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';};
+  ta.addEventListener('input',fit);fit();
 }
 function shareReport(){
-  const t=document.getElementById('r-text').textContent;
+  const t=document.getElementById('r-text').value;
   if(navigator.share)navigator.share({text:t}).catch(()=>{});
   else copyText(t);
 }
