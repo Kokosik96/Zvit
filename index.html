@@ -143,6 +143,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div style="flex:2"><label>Назва</label><input id="s-name" placeholder="напр. МОА композит"></div>
       <div><label>К-сть</label><input id="s-qty" type="number" value="1" min="0" inputmode="numeric"></div>
     </div>
+    <div id="s-sn-wrap" style="display:none">
+      <label>Серійний номер (якщо є)</label>
+      <input id="s-sn" placeholder="напр. 4587-А23" style="font-family:var(--mono)">
+    </div>
     <button class="btn" onclick="addStock()">✚ Додати</button>
   </div>
   <div id="stock-list"></div>
@@ -261,15 +265,22 @@ let stockKind='ammo';
 document.getElementById('stock-seg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;stockKind=b.dataset.k;
   document.querySelectorAll('#stock-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('s-sn-wrap').style.display=stockKind==='gear'?'block':'none';
   renderStock();
 });
 function addStock(){
   const n=document.getElementById('s-name').value.trim();
   const q=Math.max(0,parseInt(document.getElementById('s-qty').value)||0);
+  const sn=stockKind==='gear'?document.getElementById('s-sn').value.trim():'';
   if(!n){toast('Введи назву');return;}
-  const ex=S[stockKind].find(i=>i.name.toLowerCase()===n.toLowerCase());
-  if(ex)ex.qty+=q;else S[stockKind].push({id:uid(),name:n,qty:q});
+  if(sn){
+    S[stockKind].push({id:uid(),name:n,qty:q||1,sn:sn});
+  }else{
+    const ex=S[stockKind].find(i=>i.name.toLowerCase()===n.toLowerCase()&&!i.sn);
+    if(ex)ex.qty+=q;else S[stockKind].push({id:uid(),name:n,qty:q});
+  }
   document.getElementById('s-name').value='';document.getElementById('s-qty').value=1;
+  if(stockKind==='gear')document.getElementById('s-sn').value='';
   save();renderStock();fillSelects();
 }
 function chQty(kind,id,d){
@@ -285,7 +296,7 @@ function renderStock(){
   const arr=S[stockKind];const el=document.getElementById('stock-list');
   if(!arr.length){el.innerHTML='<div class="empty">Порожньо. Додай перший запис ↑</div>';return;}
   el.innerHTML=arr.map(i=>`<div class="item">
-    <div class="nm">${esc(i.name)}</div>
+    <div class="nm">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">SN: ${esc(i.sn)}</div>`:''}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
     <div class="qty ${i.qty===0?'zero':''}">${i.qty}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
