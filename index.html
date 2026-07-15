@@ -112,7 +112,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <label>Ціль</label><input id="f-target" placeholder="напр. піхота в укритті">
     <label>Район (квадрат)</label><input id="f-grid" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
-    <label>Втрати противника (якщо відомі)</label><input id="f-loss" placeholder="напр. 2х300, знищено бліндаж">
+    <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
+    <datalist id="loss-opts">
+      <option value="уточнюються"></option>
+      <option value="1х200"></option>
+      <option value="1х300"></option>
+      <option value="2х300"></option>
+      <option value="знищено бліндаж"></option>
+      <option value="знищено позицію"></option>
+    </datalist>
     <label>Результат</label>
     <select id="f-res">
       <option>Влучання в ціль</option>
@@ -161,7 +169,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   </div>
   <div class="card" id="r-card">
     <label>Дата звіту</label><input type="date" id="r-date">
-    <div id="r-loss-wrap"><label>Втрати противника</label><input id="r-losses" placeholder="уточнюються"></div>
+    <div id="r-loss-wrap"><label>Втрати противника</label><input id="r-losses" list="loss-opts" placeholder="уточнюються"></div>
   </div>
   <div id="r-out"></div>
 </section>
