@@ -155,9 +155,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 
 <!-- ЗВІТ -->
 <section id="tab-report" class="tab">
-  <div class="card">
+  <div class="seg" id="r-seg">
+    <button class="on" data-m="flights">Вильоти за день</button>
+    <button data-m="stock">Наявність</button>
+  </div>
+  <div class="card" id="r-card">
     <label>Дата звіту</label><input type="date" id="r-date">
-    <label>Втрати противника</label><input id="r-losses" placeholder="уточнюються">
+    <div id="r-loss-wrap"><label>Втрати противника</label><input id="r-losses" placeholder="уточнюються"></div>
   </div>
   <div id="r-out"></div>
 </section>
@@ -492,6 +496,37 @@ document.getElementById('r-losses').addEventListener('input',()=>{
   const ta=document.getElementById('r-text');
   if(ta){const t=buildReport(date);if(t){ta.value=t;ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';}}
 });
+function buildStockReport(date){
+  let lines=[];
+  lines.push(fmtDate(date));
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
+  lines.push('------------------------------');
+  lines.push('НАЯВНІСТЬ БК:');
+  lines.push('');
+  const ammo=S.ammo.filter(i=>i.qty>0);
+  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт`));
+  else lines.push('—');
+  lines.push('-------------------');
+  lines.push('');
+  lines.push('ДРОНИ:');
+  const dr=S.drones.filter(i=>i.qty>0);
+  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт`));
+  else lines.push('—');
+  lines.push('');
+  lines.push('-------------------');
+  lines.push('');
+  lines.push('ОБЛАДНАННЯ:');
+  lines.push('');
+  const gr=S.gear.filter(i=>i.qty>0);
+  if(gr.length)gr.forEach(i=>{
+    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} шт`:''));
+    else lines.push(`•${i.name} - ${i.qty} шт.`);
+  });
+  else lines.push('—');
+  return lines.join('\n');
+}
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
 function buildReport(date){
   const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
@@ -537,17 +572,26 @@ function buildReport(date){
   lines.push('Втрати противника - '+loss);
   return lines.join('\n');
 }
+let rMode='flights';
+document.getElementById('r-seg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;rMode=b.dataset.m;
+  document.querySelectorAll('#r-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('r-loss-wrap').style.display=rMode==='flights'?'block':'none';
+  renderReport();
+});
 function renderReport(){
   const date=document.getElementById('r-date').value||todayISO();
   document.getElementById('r-date').value=date;
   document.getElementById('r-losses').value=(S.losses&&S.losses[date])||'';
-  const t=buildReport(date);
+  const t=rMode==='stock'?buildStockReport(date):buildReport(date);
   const el=document.getElementById('r-out');
   if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
   el.innerHTML=`<textarea class="report" id="r-text" style="width:100%;min-height:120px"></textarea>
     <button class="btn" onclick="copyText(document.getElementById('r-text').value)">📋 Скопіювати звіт</button>
     <button class="btn sec" onclick="shareReport()">↗ Поділитися (месенджер)</button>
-    <p class="note">Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».</p>`;
+    <p class="note">${rMode==='stock'
+      ?'Наявність береться з поточних залишків складу. Текст можна правити перед відправкою.'
+      :'Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».'}</p>`;
   const ta=document.getElementById('r-text');
   ta.value=t;
   const fit=()=>{ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';};
