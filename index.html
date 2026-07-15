@@ -95,8 +95,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div><label>Дата</label><input type="date" id="f-date"></div>
     </div>
     <div class="row">
-      <div><label>Час зльоту</label><input id="f-t1" placeholder="12.14" inputmode="decimal"></div>
-      <div><label>Час посадки</label><input id="f-t2" placeholder="12.24" inputmode="decimal"></div>
+      <div><label>Час зльоту</label><input id="f-t1" placeholder="12:14" inputmode="decimal"></div>
+      <div><label>Час посадки</label><input id="f-t2" placeholder="12:24" inputmode="decimal"></div>
     </div>
     <div class="row">
       <div style="flex:2"><label>Дрон (зі складу)</label><select id="f-drone"></select></div>
@@ -112,6 +112,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <label>Ціль</label><input id="f-target" placeholder="напр. піхота в укритті">
     <label>Район (квадрат)</label><input id="f-grid" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
+    <label>Втрати противника (якщо відомі)</label><input id="f-loss" placeholder="напр. 2х300, знищено бліндаж">
     <label>Результат</label>
     <select id="f-res">
       <option>Влучання в ціль</option>
@@ -156,6 +157,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <section id="tab-report" class="tab">
   <div class="card">
     <label>Дата звіту</label><input type="date" id="r-date">
+    <label>Втрати противника</label><input id="r-losses" placeholder="уточнюються">
   </div>
   <div id="r-out"></div>
 </section>
@@ -191,6 +193,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h2 style="margin-top:0">Мої дані (для шапки звіту)</h2>
   <label>Підрозділ</label><input id="set-unit" placeholder="бБпС 127 овмбр">
   <label>Позиція БпЛА</label><input id="set-pos" placeholder="СОНЕЧКО">
+  <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
   <button class="btn" onclick="saveSettings()">Зберегти</button>
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
   <label style="margin-top:14px">Відновити з копії</label>
@@ -224,6 +227,8 @@ function save(){
   try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){toast('⚠ Дані лише в памʼяті (браузер блокує збереження)');}
 }
 let S=load();
+// міграція: час 12.14 → 12:14 у старих записах
+if(S.flights)S.flights.forEach(f=>{if(f.t1)f.t1=f.t1.replace(/[.,]/g,':');if(f.t2)f.t2=f.t2.replace(/[.,]/g,':');});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const fmtDate=iso=>{const[y,m,d]=iso.split('-');return d+'.'+m+'.'+y;};
@@ -251,11 +256,13 @@ const dlgSet=document.getElementById('dlg-set');
 function openSettings(){
   document.getElementById('set-unit').value=S.settings.unit;
   document.getElementById('set-pos').value=S.settings.position;
+  document.getElementById('set-crew').value=S.settings.crew||'';
   dlgSet.showModal();
 }
 function saveSettings(){
   S.settings.unit=document.getElementById('set-unit').value.trim();
   S.settings.position=document.getElementById('set-pos').value.trim();
+  S.settings.crew=document.getElementById('set-crew').value.trim();
   save();dlgSet.close();toast('Збережено');
 }
 function exportData(){
@@ -364,15 +371,16 @@ function flightText(f){
   const unit=f.unit?f.unit+' ':'';
   const pos=f.position?`(позиція БпЛА “${f.position}”), `:'';
   const rng=f.range?' '+f.range:'';
-  const ammo=f.ammoName?`БК-${f.ammoName}${f.ammoQty>1?' ×'+f.ammoQty:''} `:'';
+  const ammo=f.ammoName?`БК ${f.ammoName}${f.ammoQty>1?' ×'+f.ammoQty:''} `:'';
   return `${f.t1}-${f.t2} ${unit}${pos}удар дроном-${f.chan} ${f.droneName}${rng}. `+
     `${ammo}Ціль: ${f.target} Відпрацювання в районі ${f.grid} ${f.result}`;
 }
 
+const normTime=s=>s.replace(/[.,]/g,':');
 function saveFlight(){
   const date=document.getElementById('f-date').value||todayISO();
-  const t1=document.getElementById('f-t1').value.trim();
-  const t2=document.getElementById('f-t2').value.trim();
+  const t1=normTime(document.getElementById('f-t1').value.trim());
+  const t2=normTime(document.getElementById('f-t2').value.trim());
   const droneId=document.getElementById('f-drone').value;
   const chan=document.getElementById('f-chan').value;
   const range=document.getElementById('f-range').value.trim();
@@ -381,6 +389,7 @@ function saveFlight(){
   const aq=Math.max(0,parseInt(document.getElementById('f-aqty').value)||0);
   const target=document.getElementById('f-target').value.trim();
   const grid=document.getElementById('f-grid').value.trim();
+  const loss=document.getElementById('f-loss').value.trim();
   let res=document.getElementById('f-res').value;
   if(res==='_c')res=document.getElementById('f-res-c').value.trim()||'—';
   if(!t1||!t2){toast('Вкажи час зльоту і посадки');return;}
@@ -399,7 +408,7 @@ function saveFlight(){
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
     droneId,droneName:drone.name,chan,range,lost,
     ammoId:ammo?ammo.id:'',ammoName:ammo?ammo.name:'',ammoQty:ammo?aq:0,
-    target,grid,result:res};
+    target,grid,result:res,loss};
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
     document.getElementById('f-cancel').style.display='none';toast('Виліт оновлено');}
   else{S.flights.push(f);toast('Виліт збережено, склад оновлено');}
@@ -410,7 +419,7 @@ function restoreStock(f){
   if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);if(a)a.qty+=f.ammoQty;}
 }
 function clearForm(){
-  ['f-t1','f-t2','f-range','f-target','f-grid','f-res-c'].forEach(i=>document.getElementById(i).value='');
+  ['f-t1','f-t2','f-range','f-target','f-grid','f-loss','f-res-c'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
@@ -430,6 +439,7 @@ function editFlight(id){
   document.getElementById('f-aqty').value=f.ammoQty||0;
   document.getElementById('f-target').value=f.target;
   document.getElementById('f-grid').value=f.grid;
+  document.getElementById('f-loss').value=f.loss||'';
   const sel=document.getElementById('f-res');
   if([...sel.options].some(o=>o.value===f.result))sel.value=f.result;
   else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=f.result;c.style.display='block';}
@@ -474,33 +484,63 @@ function renderFlights(){
 
 /* ===== daily report ===== */
 document.getElementById('r-date').addEventListener('change',renderReport);
+document.getElementById('r-losses').addEventListener('input',()=>{
+  const date=document.getElementById('r-date').value||todayISO();
+  if(!S.losses)S.losses={};
+  S.losses[date]=document.getElementById('r-losses').value.trim();
+  save();
+  const ta=document.getElementById('r-text');
+  if(ta){const t=buildReport(date);if(t){ta.value=t;ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';}}
+});
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
 function buildReport(date){
   const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
   if(!arr.length)return null;
   let lines=[];
-  lines.push('ЗВІТ за '+fmtDate(date));
-  if(S.settings.unit)lines.push(S.settings.unit+(S.settings.position?` (позиція БпЛА “${S.settings.position}”)`:''));
+  lines.push(fmtDate(date));
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
   lines.push('');
   arr.forEach((f,i)=>lines.push((i+1)+'. '+flightText(f)));
   lines.push('');
-  lines.push('ПІДСУМОК:');
-  lines.push('Вильотів: '+arr.length);
-  const ammoUse={},droneUse={};
+  // Майно — списані дрони
+  const droneUse={};
   arr.forEach(f=>{
-    if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;
-    if(f.lost)droneUse[f.droneName]=(droneUse[f.droneName]||0)+1;
+    if(f.lost){
+      const k=`Дрон ${f.chan} ${f.droneName}${f.range?' '+f.range:''}`;
+      droneUse[k]=(droneUse[k]||0)+1;
+    }
   });
-  const au=Object.entries(ammoUse).map(([n,q])=>`${n} — ${q}`).join(', ');
-  const du=Object.entries(droneUse).map(([n,q])=>`${n} — ${q}`).join(', ');
-  lines.push('Витрачено БК: '+(au||'0'));
-  lines.push('Витрачено дронів: '+(du||'0'));
-  const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
-  lines.push(`Влучань: ${hit} з ${arr.length}`);
+  lines.push('Майно');
+  const du=Object.entries(droneUse);
+  if(du.length)du.forEach(([n,q])=>lines.push(`${n} - ${q} од`));
+  else lines.push('—');
+  lines.push('');
+  // БК
+  const ammoUse={};
+  arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+  lines.push('БК');
+  const au=Object.entries(ammoUse);
+  if(au.length)au.forEach(([n,q])=>lines.push(`${cap(n)} - ${q} од.`));
+  else lines.push('—');
+  lines.push('');
+  const manual=(S.losses&&S.losses[date])||'';
+  let loss;
+  if(manual)loss=manual;
+  else{
+    const fl=arr.map((f,i)=>({n:i+1,t:(f.loss||'').trim()})).filter(x=>x.t);
+    if(!fl.length)loss='уточнюються';
+    else if(fl.length===1)loss=fl[0].t;
+    else loss=fl.map(x=>`п.${x.n} — ${x.t}`).join('; ');
+  }
+  lines.push('Втрати противника - '+loss);
   return lines.join('\n');
 }
 function renderReport(){
   const date=document.getElementById('r-date').value||todayISO();
   document.getElementById('r-date').value=date;
+  document.getElementById('r-losses').value=(S.losses&&S.losses[date])||'';
   const t=buildReport(date);
   const el=document.getElementById('r-out');
   if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
