@@ -15,7 +15,7 @@
   --mono:ui-monospace,'Cascadia Mono','Roboto Mono',monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
+body{min-height:100vh}
 body{background:var(--bg);color:var(--txt);font:16px/1.45 system-ui,Roboto,sans-serif;
   padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
 header{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line);
@@ -25,6 +25,7 @@ header h1 span{color:var(--accent)}
 header h1 .ver{color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;margin-left:6px}
 .gear{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 12px;font-size:15px}
 main{padding:14px 14px 20px;max-width:640px;margin:0 auto}
+main::after{content:'';display:block;height:160px}
 .tab{display:none}.tab.on{display:block}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:10;background:var(--panel);border-top:1px solid var(--line);
   display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -84,7 +85,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v11</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v13</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
