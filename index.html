@@ -84,7 +84,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v8</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v9</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -102,11 +102,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <div class="row">
       <div style="flex:2"><label>Дрон (зі складу)</label><select id="f-drone"></select></div>
-      <div><label>Канал</label><select id="f-chan"><option>оптоволокно</option><option>радіоканал</option></select></div>
-    </div>
-    <div class="row">
-      <div><label>Котушка/дальність</label><input id="f-range" placeholder="10+15 км"></div>
-      <div><label>Дрон списати?</label><select id="f-lost"><option value="1">Так (−1 зі складу)</option><option value="0">Ні</option></select></div>
+      <div><label>Дрон списати?</label><select id="f-lost"><option value="1">Так (−1)</option><option value="0">Ні</option></select></div>
     </div>
     <div class="row">
       <div style="flex:2"><label>БК (зі складу)</label><select id="f-ammo"></select></div>
@@ -384,9 +380,8 @@ document.getElementById('f-date').addEventListener('change',renderFlights);
 function flightText(f){
   const unit=f.unit?f.unit+' ':'';
   const pos=f.position?`(позиція БпЛА “${f.position}”), `:'';
-  const rng=f.range?' '+f.range:'';
   const ammo=f.ammoName?`БК ${f.ammoName}${f.ammoQty>1?' ×'+f.ammoQty:''} `:'';
-  return `${f.t1}-${f.t2} ${unit}${pos}удар дроном-${f.chan} ${f.droneName}${rng}. `+
+  return `${f.t1}-${f.t2} ${unit}${pos}удар дроном - камікадзе ${f.droneName}. `+
     `${ammo}Ціль: ${f.target} Відпрацювання в районі ${f.grid} ${f.result}`;
 }
 
@@ -396,8 +391,6 @@ function saveFlight(){
   const t1=normTime(document.getElementById('f-t1').value.trim());
   const t2=normTime(document.getElementById('f-t2').value.trim());
   const droneId=document.getElementById('f-drone').value;
-  const chan=document.getElementById('f-chan').value;
-  const range=document.getElementById('f-range').value.trim();
   const lost=document.getElementById('f-lost').value==='1';
   const ammoId=document.getElementById('f-ammo').value;
   const aq=Math.max(0,parseInt(document.getElementById('f-aqty').value)||0);
@@ -420,7 +413,7 @@ function saveFlight(){
   if(ammo&&aq>0)ammo.qty=Math.max(0,ammo.qty-aq);
 
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
-    droneId,droneName:drone.name,chan,range,lost,
+    droneId,droneName:drone.name,lost,
     ammoId:ammo?ammo.id:'',ammoName:ammo?ammo.name:'',ammoQty:ammo?aq:0,
     target,grid,result:res,loss};
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
@@ -433,7 +426,7 @@ function restoreStock(f){
   if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);if(a)a.qty+=f.ammoQty;}
 }
 function clearForm(){
-  ['f-t1','f-t2','f-range','f-target','f-grid','f-loss','f-res-c'].forEach(i=>document.getElementById(i).value='');
+  ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
@@ -446,8 +439,6 @@ function editFlight(id){
   document.getElementById('f-t2').value=f.t2;
   fillSelects();
   document.getElementById('f-drone').value=f.droneId;
-  document.getElementById('f-chan').value=f.chan;
-  document.getElementById('f-range').value=f.range;
   document.getElementById('f-lost').value=f.lost?'1':'0';
   document.getElementById('f-ammo').value=f.ammoId;
   document.getElementById('f-aqty').value=f.ammoQty||0;
@@ -553,7 +544,7 @@ function buildReport(date){
   const droneUse={};
   arr.forEach(f=>{
     if(f.lost){
-      const k=`Дрон ${f.chan} ${f.droneName}${f.range?' '+f.range:''}`;
+      const k=`Дрон ${f.droneName}`;
       droneUse[k]=(droneUse[k]||0)+1;
     }
   });
