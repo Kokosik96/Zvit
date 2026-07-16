@@ -85,7 +85,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v14</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v15</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -109,7 +109,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div style="flex:2"><label>БК (зі складу)</label><select id="f-ammo"></select></div>
       <div><label>К-сть БК</label><input id="f-aqty" type="number" value="1" min="0" inputmode="numeric"></div>
     </div>
-    <label>Ціль (по кому/чому)</label><input id="f-target" placeholder="напр. живій силі противника">
+    <label>Ціль (по кому/чому)</label><input id="f-target" list="target-opts" placeholder="напр. живій силі противника">
+    <datalist id="target-opts">
+      <option value="живій силі противника"></option>
+      <option value="техніці противника"></option>
+      <option value="позиції противника"></option>
+      <option value="Розвідка"></option>
+    </datalist>
     <label>Район (квадрат)</label><input id="f-grid" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
     <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
     <datalist id="loss-opts">
@@ -382,7 +388,7 @@ document.getElementById('f-date').addEventListener('change',renderFlights);
 function flightText(f){
   const pos=f.position?`(позиція FPV “${f.position}”), `:'';
   const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:'';
-  const tgt=f.target?`по ${f.target} `:'';
+  const tgt=f.target?(/^розвідк/i.test(f.target)?`${f.target} `:`по ${f.target} `):'';
   return `${f.t1} - ${f.t2} ${pos}удар дроном-камікадзе на оптоволокні ${f.droneName}${ammo}, ${tgt}в районі ${f.grid}\n`+
     `Результат: ${f.result}\n`+
     `Втрати противника: ${f.loss||'уточнюються'}`;
