@@ -681,6 +681,13 @@ function drawChart(arr,days){
 
 /* ===== init ===== */
 function renderAll(){fillSelects();renderStock();renderFlights();renderReport();}
+// відступ знизу = реальна висота меню + запас (працює при будь-якому масштабі шрифту)
+function fitBottomPad(){
+  const nav=document.getElementById('nav');
+  document.body.style.paddingBottom=(nav.offsetHeight+56)+'px';
+}
+window.addEventListener('resize',fitBottomPad);
+fitBottomPad();
 document.getElementById('f-date').value=todayISO();
 document.getElementById('r-date').value=todayISO();
 renderAll();
