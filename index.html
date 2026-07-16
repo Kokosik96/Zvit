@@ -85,7 +85,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v13</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v14</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -506,6 +506,7 @@ function buildStockReport(date){
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
   if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
+  lines.push('');
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
   const ammo=S.ammo.filter(i=>i.qty>0);
