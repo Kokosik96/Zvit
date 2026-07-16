@@ -22,6 +22,7 @@ header{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px s
   display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
 header h1{font-size:17px;letter-spacing:.06em;text-transform:uppercase}
 header h1 span{color:var(--accent)}
+header h1 .ver{color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;margin-left:6px}
 .gear{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 12px;font-size:15px}
 main{padding:14px 14px 20px;max-width:640px;margin:0 auto}
 .tab{display:none}.tab.on{display:block}
@@ -83,7 +84,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v8</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -684,10 +685,11 @@ function renderAll(){fillSelects();renderStock();renderFlights();renderReport();
 // відступ знизу = реальна висота меню + запас (працює при будь-якому масштабі шрифту)
 function fitBottomPad(){
   const nav=document.getElementById('nav');
-  document.body.style.paddingBottom=(nav.offsetHeight+56)+'px';
+  document.body.style.paddingBottom=(nav.offsetHeight+72)+'px';
 }
 window.addEventListener('resize',fitBottomPad);
-fitBottomPad();
+window.addEventListener('load',fitBottomPad);
+fitBottomPad();setTimeout(fitBottomPad,300);setTimeout(fitBottomPad,1200);
 document.getElementById('f-date').value=todayISO();
 document.getElementById('r-date').value=todayISO();
 renderAll();
