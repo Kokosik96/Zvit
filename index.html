@@ -84,7 +84,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v9</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v11</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -108,7 +108,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div style="flex:2"><label>БК (зі складу)</label><select id="f-ammo"></select></div>
       <div><label>К-сть БК</label><input id="f-aqty" type="number" value="1" min="0" inputmode="numeric"></div>
     </div>
-    <label>Ціль</label><input id="f-target" placeholder="напр. піхота в укритті">
+    <label>Ціль (по кому/чому)</label><input id="f-target" placeholder="напр. живій силі противника">
     <label>Район (квадрат)</label><input id="f-grid" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
     <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
     <datalist id="loss-opts">
@@ -125,6 +125,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option>Влучання в район цілі</option>
       <option>Ціль уражена</option>
       <option>Промах</option>
+      <option>Втрата керування</option>
       <option>Втрата дрона (РЕБ)</option>
       <option>Не виконано</option>
       <option value="_c">Інше…</option>
@@ -378,11 +379,12 @@ document.getElementById('f-res').addEventListener('change',e=>{
 document.getElementById('f-date').addEventListener('change',renderFlights);
 
 function flightText(f){
-  const unit=f.unit?f.unit+' ':'';
-  const pos=f.position?`(позиція БпЛА “${f.position}”), `:'';
-  const ammo=f.ammoName?`БК ${f.ammoName}${f.ammoQty>1?' ×'+f.ammoQty:''} `:'';
-  return `${f.t1}-${f.t2} ${unit}${pos}удар дроном - камікадзе ${f.droneName}. `+
-    `${ammo}Ціль: ${f.target} Відпрацювання в районі ${f.grid} ${f.result}`;
+  const pos=f.position?`(позиція FPV “${f.position}”), `:'';
+  const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:'';
+  const tgt=f.target?`по ${f.target} `:'';
+  return `${f.t1} - ${f.t2} ${pos}удар дроном-камікадзе на оптоволокні ${f.droneName}${ammo}, ${tgt}в районі ${f.grid}\n`+
+    `Результат: ${f.result}\n`+
+    `Втрати противника: ${f.loss||'уточнюються'}`;
 }
 
 const normTime=s=>s.replace(/[.,]/g,':');
@@ -503,29 +505,27 @@ function buildStockReport(date){
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
   if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
-  lines.push('------------------------------');
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
   const ammo=S.ammo.filter(i=>i.qty>0);
-  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт`));
-  else lines.push('—');
-  lines.push('-------------------');
+  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
+  else lines.push('•—');
   lines.push('');
-  lines.push('ДРОНИ:');
+  lines.push('ДРОНИ ОПТОВОЛОКНО:');
   const dr=S.drones.filter(i=>i.qty>0);
-  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт`));
-  else lines.push('—');
+  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
+  else lines.push('•—');
   lines.push('');
-  lines.push('-------------------');
+  lines.push('───');
   lines.push('');
   lines.push('ОБЛАДНАННЯ:');
   lines.push('');
   const gr=S.gear.filter(i=>i.qty>0);
   if(gr.length)gr.forEach(i=>{
-    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} шт`:''));
+    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} шт.`:''));
     else lines.push(`•${i.name} - ${i.qty} шт.`);
   });
-  else lines.push('—');
+  else lines.push('•—');
   return lines.join('\n');
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
@@ -533,44 +533,44 @@ function buildReport(date){
   const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
   if(!arr.length)return null;
   let lines=[];
-  lines.push(fmtDate(date));
+  lines.push('Звіт '+fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
   if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
   lines.push('');
-  arr.forEach((f,i)=>lines.push((i+1)+'. '+flightText(f)));
-  lines.push('');
-  // Майно — списані дрони
-  const droneUse={};
-  arr.forEach(f=>{
-    if(f.lost){
-      const k=`Дрон ${f.droneName}`;
-      droneUse[k]=(droneUse[k]||0)+1;
-    }
+  arr.forEach((f,i)=>{
+    lines.push((i+1)+'. '+flightText(f));
+    lines.push('');
   });
-  lines.push('Майно');
-  const du=Object.entries(droneUse);
-  if(du.length)du.forEach(([n,q])=>lines.push(`${n} - ${q} од`));
-  else lines.push('—');
+  lines.push('Всього вильотів: '+arr.length);
   lines.push('');
-  // БК
+  lines.push('ВИТРАТА БК:');
+  lines.push('');
   const ammoUse={};
   arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
-  lines.push('БК');
   const au=Object.entries(ammoUse);
-  if(au.length)au.forEach(([n,q])=>lines.push(`${cap(n)} - ${q} од.`));
-  else lines.push('—');
+  if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
+  else lines.push('• —');
   lines.push('');
+  lines.push('ВИТРАТИ МАЙНА:');
+  lines.push('');
+  const droneUse={};
+  arr.forEach(f=>{if(f.lost)droneUse[f.droneName]=(droneUse[f.droneName]||0)+1;});
+  const du=Object.entries(droneUse);
+  if(du.length)du.forEach(([n,q])=>lines.push(`• ${n} - ${q} шт.`));
+  else lines.push('• —');
+  lines.push('');
+  lines.push('ВТРАТИ ВОРОГА:');
   const manual=(S.losses&&S.losses[date])||'';
   let loss;
   if(manual)loss=manual;
   else{
-    const fl=arr.map((f,i)=>({n:i+1,t:(f.loss||'').trim()})).filter(x=>x.t);
-    if(!fl.length)loss='уточнюються';
-    else if(fl.length===1)loss=fl[0].t;
+    const fl=arr.map((f,i)=>({n:i+1,t:(f.loss||'').trim()})).filter(x=>x.t&&!/^уточн/i.test(x.t));
+    if(!fl.length)loss='Уточнюються';
+    else if(fl.length===1)loss=cap(fl[0].t);
     else loss=fl.map(x=>`п.${x.n} — ${x.t}`).join('; ');
   }
-  lines.push('Втрати противника - '+loss);
+  lines.push(loss);
   return lines.join('\n');
 }
 let rMode='flights';
