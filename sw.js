@@ -1,8 +1,5 @@
-const CACHE = 'zvitfpv-v3';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/mgrs@1.0.0/dist/mgrs.js'];
+const CACHE = 'zvitfpv-v4';
+const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -16,20 +13,10 @@ self.addEventListener('activate', e => {
 });
 
 // index.html: спочатку мережа (щоб підтягувати оновлення), офлайн — з кеша.
-// CDN (leaflet/mgrs): cache-first. Решта: з кеша одразу.
+// Решта файлів: з кеша одразу.
 self.addEventListener('fetch', e => {
-  const url = e.request.url;
-  const isCDN = url.includes('unpkg.com');
-  const isPage = e.request.mode === 'navigate' || url.endsWith('index.html');
-  if (isCDN) {
-    e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
-        const copy = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-        return resp;
-      }))
-    );
-  } else if (isPage) {
+  const isPage = e.request.mode === 'navigate' || e.request.url.endsWith('index.html');
+  if (isPage) {
     e.respondWith(
       fetch(e.request)
         .then(r => {
