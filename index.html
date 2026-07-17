@@ -6,6 +6,9 @@
 <meta name="theme-color" content="#0f1216">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/mgrs@1.0.0/dist/mgrs.js"></script>
 <title>Звіт FPV</title>
 <style>
 :root{
@@ -85,7 +88,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v15</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v16</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -198,11 +201,22 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div id="stats-drones"></div>
 </section>
 
+<!-- КАРТА -->
+<section id="tab-map" class="tab">
+  <div id="map-status" class="note" style="margin:0 0 8px">Точки беруться з квадратів вильотів. Відкрий район з інтернетом — тайли збережуться для офлайну.</div>
+  <div id="map" style="width:100%;height:62vh;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel2)"></div>
+  <div class="row" style="margin-top:10px">
+    <button class="btn sec" style="margin-top:0" onclick="cacheVisibleTiles()">⬇ Зберегти видимий район офлайн</button>
+  </div>
+  <div id="map-cache-info" class="note"></div>
+</section>
+
 </main>
 
 <nav id="nav">
   <button class="on" data-t="fly"><span class="ic">🛩</span>Вильоти</button>
   <button data-t="stock"><span class="ic">📦</span>Склад</button>
+  <button data-t="map"><span class="ic">🗺</span>Карта</button>
   <button data-t="report"><span class="ic">📄</span>Звіт</button>
   <button data-t="stats"><span class="ic">📊</span>Аналітика</button>
 </nav>
@@ -267,6 +281,7 @@ document.getElementById('nav').addEventListener('click',e=>{
   if(b.dataset.t==='stats')renderStats();
   if(b.dataset.t==='stock')renderStock();
   if(b.dataset.t==='fly')renderFlights();
+  if(b.dataset.t==='map')initMap();
 });
 
 /* ===== settings ===== */
@@ -677,6 +692,126 @@ function drawChart(arr,days){
     if(days<=31){ctx.fillStyle='#8b94a0';ctx.fillText(labels[i],x+bw/2,H-6*devicePixelRatio);}
     if(c){ctx.fillStyle='#d9dfe6';ctx.fillText(c,x+bw/2,H-26*devicePixelRatio-h);}
   });
+}
+
+/* ===== map ===== */
+let map=null, mapMarkers=null, tileDB=null;
+// IndexedDB для офлайн-тайлів
+function openTileDB(){
+  return new Promise((res)=>{
+    if(tileDB)return res(tileDB);
+    const rq=indexedDB.open('fpv-tiles',1);
+    rq.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('t'))db.createObjectStore('t');};
+    rq.onsuccess=e=>{tileDB=e.target.result;res(tileDB);};
+    rq.onerror=()=>res(null);
+  });
+}
+function tileGet(key){
+  return new Promise(res=>openTileDB().then(db=>{
+    if(!db)return res(null);
+    const tx=db.transaction('t','readonly').objectStore('t').get(key);
+    tx.onsuccess=()=>res(tx.result||null);tx.onerror=()=>res(null);
+  }));
+}
+function tilePut(key,blob){
+  openTileDB().then(db=>{if(db)db.transaction('t','readwrite').objectStore('t').put(blob,key);});
+}
+// кастомний шар: віддає тайл з IndexedDB, інакше тягне з мережі й кешує
+let OfflineTileLayer=null;
+function defineTileLayer(){
+  if(OfflineTileLayer||!window.L)return;
+  OfflineTileLayer=L.TileLayer.extend({
+    createTile:function(coords,done){
+      const tile=document.createElement('img');
+      tile.alt='';
+      const key=coords.z+'/'+coords.x+'/'+coords.y;
+      const url=this.getTileUrl(coords);
+      tileGet(key).then(blob=>{
+        if(blob){tile.src=URL.createObjectURL(blob);done(null,tile);return;}
+        fetch(url).then(r=>r.ok?r.blob():Promise.reject()).then(b=>{
+          tilePut(key,b);tile.src=URL.createObjectURL(b);done(null,tile);
+        }).catch(()=>{done(null,tile);});
+      });
+      return tile;
+    }
+  });
+}
+function flightsWithCoords(){
+  const out=[];
+  (S.flights||[]).forEach(f=>{
+    if(!f.grid)return;
+    try{const p=mgrs.toPoint(f.grid.replace(/\s+/g,' ').trim());
+      if(p&&isFinite(p[0])&&isFinite(p[1]))out.push({f,lat:p[1],lon:p[0]});
+    }catch(e){}
+  });
+  return out;
+}
+const RESULT_COLOR=r=>{
+  if(/влуч|ураж/i.test(r))return'#7fbf7a';
+  if(/промах|не виконано/i.test(r))return'#d96b5a';
+  if(/керуван|реб|втрат/i.test(r))return'#e0a83c';
+  return'#b6c46a';
+};
+function initMap(){
+  if(!window.L){document.getElementById('map-status').textContent='⚠ Карта не завантажилась (потрібен інтернет для першого відкриття).';return;}
+  defineTileLayer();
+  if(!map){
+    map=L.map('map',{zoomControl:true,attributionControl:false}).setView([50.25,36.90],11);
+    mapMarkers=L.layerGroup().addTo(map);
+    new OfflineTileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,minZoom:5}).addTo(map);
+  }
+  refreshMapMarkers();
+  setTimeout(()=>map.invalidateSize(),100);
+}
+function refreshMapMarkers(){
+  if(!map||!mapMarkers)return;
+  mapMarkers.clearLayers();
+  const pts=flightsWithCoords();
+  if(!pts.length){document.getElementById('map-status').textContent='Немає вильотів з координатами. Додай квадрат у вильоті — точка зʼявиться тут.';return;}
+  document.getElementById('map-status').textContent=`Точок на карті: ${pts.length}. Тап по точці — звіт вильоту.`;
+  const latlngs=[];
+  pts.forEach(({f,lat,lon})=>{
+    latlngs.push([lat,lon]);
+    const col=RESULT_COLOR(f.result);
+    const mk=L.circleMarker([lat,lon],{radius:8,color:'#0f1216',weight:2,fillColor:col,fillOpacity:.95});
+    const html=`<div style="font:13px system-ui;max-width:240px">
+      <b>${esc(fmtDate(f.date))} ${esc(f.t1)}–${esc(f.t2)}</b><br>
+      <span style="color:#555">${esc(f.grid)}</span><br>
+      Дрон: ${esc(f.droneName||'—')}<br>
+      ${f.target?'Ціль: '+esc(f.target)+'<br>':''}
+      Результат: ${esc(f.result)}<br>
+      ${f.loss?'Втрати ворога: '+esc(f.loss)+'<br>':''}
+      <a href="#" onclick="copyMgrsForMilchat('${esc(f.grid)}');return false;" style="color:#2a6">📋 Копіювати координати</a>
+    </div>`;
+    mk.bindPopup(html);
+    mapMarkers.addLayer(mk);
+  });
+  if(latlngs.length===1)map.setView(latlngs[0],14);
+  else map.fitBounds(latlngs,{padding:[40,40],maxZoom:15});
+}
+function copyMgrsForMilchat(grid){copyText(grid);}
+function cacheVisibleTiles(){
+  if(!map){toast('Карта не готова');return;}
+  const b=map.getBounds(),z0=map.getZoom();
+  const info=document.getElementById('map-cache-info');
+  let queued=0;
+  const lvls=[z0];
+  if(z0+1<=18)lvls.push(z0+1);
+  if(z0-1>=5)lvls.push(z0-1);
+  const lon2x=(lon,z)=>Math.floor((lon+180)/360*Math.pow(2,z));
+  const lat2y=(lat,z)=>{const r=lat*Math.PI/180;return Math.floor((1-Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2*Math.pow(2,z));};
+  lvls.forEach(z=>{
+    const x1=lon2x(b.getWest(),z),x2=lon2x(b.getEast(),z);
+    const y1=lat2y(b.getNorth(),z),y2=lat2y(b.getSouth(),z);
+    for(let x=x1;x<=x2;x++)for(let y=y1;y<=y2;y++){
+      const key=z+'/'+x+'/'+y;
+      const url=`https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+      queued++;
+      tileGet(key).then(bl=>{if(bl)return;fetch(url).then(r=>r.ok?r.blob():Promise.reject()).then(b=>tilePut(key,b)).catch(()=>{});});
+    }
+  });
+  info.textContent=`Збереження ~${queued} тайлів району (рівні ${lvls.join(', ')}). Тримай застосунок відкритим кілька секунд.`;
+  toast('Зберігаю район офлайн…');
 }
 
 /* ===== init ===== */
