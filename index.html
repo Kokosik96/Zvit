@@ -50,6 +50,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .item .nm{flex:1;min-width:0;overflow-wrap:anywhere}
 .item .qty{font-family:var(--mono);font-size:17px;min-width:34px;text-align:center}
 .item .qty.zero{color:var(--red)}
+.item.low{border-color:var(--amber)}
+.item .qty.low{color:var(--amber)}
 .pm{width:40px;height:40px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
   color:var(--txt);font-size:20px;flex:none}
 .del{width:40px;height:40px;border-radius:8px;background:none;border:1px solid var(--line);color:var(--red);font-size:16px;flex:none}
@@ -85,7 +87,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v15</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v17</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -212,6 +214,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Підрозділ</label><input id="set-unit" placeholder="бБпС 127 овмбр">
   <label>Позиція БпЛА</label><input id="set-pos" placeholder="СОНЕЧКО">
   <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
+  <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
   <button class="btn" onclick="saveSettings()">Зберегти</button>
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
   <label style="margin-top:14px">Відновити з копії</label>
@@ -275,12 +278,14 @@ function openSettings(){
   document.getElementById('set-unit').value=S.settings.unit;
   document.getElementById('set-pos').value=S.settings.position;
   document.getElementById('set-crew').value=S.settings.crew||'';
+  document.getElementById('set-low').value=S.settings.lowThreshold??2;
   dlgSet.showModal();
 }
 function saveSettings(){
   S.settings.unit=document.getElementById('set-unit').value.trim();
   S.settings.position=document.getElementById('set-pos').value.trim();
   S.settings.crew=document.getElementById('set-crew').value.trim();
+  S.settings.lowThreshold=Math.max(0,parseInt(document.getElementById('set-low').value)||0);
   save();dlgSet.close();toast('Збережено');
 }
 function exportData(){
@@ -361,14 +366,18 @@ function saveStockEdit(){
 function renderStock(){
   const arr=S[stockKind];const el=document.getElementById('stock-list');
   if(!arr.length){el.innerHTML='<div class="empty">Порожньо. Додай перший запис ↑</div>';return;}
-  el.innerHTML=arr.map(i=>`<div class="item">
+  const low=S.settings.lowThreshold??2;
+  const chk=(stockKind==='ammo'||stockKind==='drones');
+  el.innerHTML=arr.map(i=>{
+    const isLow=chk&&i.qty>0&&i.qty<=low;
+    return `<div class="item ${isLow?'low':''}">
     <div class="nm">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">SN: ${esc(i.sn)}</div>`:''}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
-    <div class="qty ${i.qty===0?'zero':''}">${i.qty}</div>
+    <div class="qty ${i.qty===0?'zero':isLow?'low':''}">${i.qty}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
     <button class="del" style="color:var(--muted)" onclick="editStock('${stockKind}','${i.id}')">✎</button>
     <button class="del" onclick="delStock('${stockKind}','${i.id}')">✕</button>
-  </div>`).join('');
+  </div>`;}).join('');
 }
 
 /* ===== flights ===== */
@@ -427,7 +436,13 @@ function saveFlight(){
     target,grid,result:res,loss};
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
     document.getElementById('f-cancel').style.display='none';toast('Виліт оновлено');}
-  else{S.flights.push(f);toast('Виліт збережено, склад оновлено');}
+  else{
+    S.flights.push(f);toast('Виліт збережено, склад оновлено');
+    S.backupCounter=(S.backupCounter||0)+1;
+    if(S.backupCounter%10===0)setTimeout(()=>{
+      if(confirm(`Збережено ${S.backupCounter} вильотів. Зробити резервну копію даних у файл? (рекомендується)`))exportData();
+    },600);
+  }
   save();clearForm();renderFlights();fillSelects();
 }
 function restoreStock(f){
@@ -479,6 +494,27 @@ function fallbackCopy(t){
   ta.remove();
 }
 function copyFlight(id){const f=S.flights.find(x=>x.id===id);if(f)copyText(flightText(f));}
+function dupFlight(id){
+  const f=S.flights.find(x=>x.id===id);if(!f)return;
+  editId=null;
+  document.getElementById('f-cancel').style.display='none';
+  document.getElementById('f-date').value=f.date;
+  document.getElementById('f-t1').value='';
+  document.getElementById('f-t2').value='';
+  fillSelects();
+  document.getElementById('f-drone').value=f.droneId||'';
+  document.getElementById('f-lost').value=f.lost?'1':'0';
+  document.getElementById('f-ammo').value=f.ammoId||'';
+  document.getElementById('f-aqty').value=f.ammoQty||0;
+  document.getElementById('f-target').value=f.target||'';
+  document.getElementById('f-grid').value=f.grid||'';
+  document.getElementById('f-loss').value=f.loss||'';
+  const sel=document.getElementById('f-res');
+  if([...sel.options].some(o=>o.value===f.result))sel.value=f.result;
+  else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=f.result;c.style.display='block';}
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast('Дані підставлено — впиши час і збережи');
+}
 function renderFlights(){
   const date=document.getElementById('f-date').value||todayISO();
   document.getElementById('fly-day-label').textContent=fmtDate(date);
@@ -490,6 +526,7 @@ function renderFlights(){
     <div class="txt">${esc(flightText(f))}</div>
     <div class="acts">
       <button onclick="copyFlight('${f.id}')">📋 Копіювати</button>
+      <button onclick="dupFlight('${f.id}')">⧉ Дублювати</button>
       <button onclick="editFlight('${f.id}')">✎ Редагувати</button>
       <button onclick="delFlight('${f.id}')" style="color:var(--red)">✕</button>
     </div>
