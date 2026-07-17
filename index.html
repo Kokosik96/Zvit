@@ -14,6 +14,10 @@
   --amber:#e0a83c; --red:#d96b5a; --green:#7fbf7a;
   --mono:ui-monospace,'Cascadia Mono','Roboto Mono',monospace;
 }
+html.light{
+  --bg:#eef1f4; --panel:#ffffff; --panel2:#f2f5f8; --line:#d2d9e0;
+  --txt:#1a2028; --muted:#5c6672; --accent:#4a6d1e; --accent-dk:#e4edd2;
+}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 body{min-height:100vh}
 body{background:var(--bg);color:var(--txt);font:16px/1.45 system-ui,Roboto,sans-serif;
@@ -87,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v17</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v18</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -145,6 +149,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   </div>
 
   <h2>Вильоти за <span id="fly-day-label"></span></h2>
+  <input id="fly-search" placeholder="🔍 пошук: дрон, ціль, квадрат, результат…" oninput="renderFlights()" style="margin-bottom:10px">
   <div id="fly-list"></div>
 </section>
 
@@ -194,10 +199,30 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div class="card"><canvas id="chart" height="150"></canvas></div>
   <h2>Результати</h2>
   <div id="stats-res"></div>
+  <h2>Наліт по дронах (вильотів / влучань)</h2>
+  <div id="stats-topdrone"></div>
+  <h2>Ефективність по БК (% влучань)</h2>
+  <div id="stats-ammoeff"></div>
   <h2>Витрати БК за період</h2>
   <div id="stats-ammo"></div>
   <h2>Списано дронів за період</h2>
   <div id="stats-drones"></div>
+
+  <h2>Експорт звітів за період</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>Від</label><input type="date" id="exp-from"></div>
+      <div><label>До</label><input type="date" id="exp-to"></div>
+    </div>
+    <button class="btn" onclick="exportPeriod()">📋 Зібрати денні звіти</button>
+    <div id="exp-out" style="margin-top:12px"></div>
+  </div>
+
+  <h2>Історія руху складу</h2>
+  <div class="card">
+    <button class="btn sec" style="margin-top:0" onclick="toggleStockLog()">Показати / сховати лог</button>
+    <div id="stock-log" style="display:none;margin-top:10px"></div>
+  </div>
 </section>
 
 </main>
@@ -215,6 +240,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Позиція БпЛА</label><input id="set-pos" placeholder="СОНЕЧКО">
   <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
   <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
+  <button class="btn sec" id="theme-btn" onclick="toggleTheme()">☀ Світла тема</button>
   <button class="btn" onclick="saveSettings()">Зберегти</button>
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
   <label style="margin-top:14px">Відновити з копії</label>
@@ -251,6 +277,11 @@ let S=load();
 // міграція: час 12.14 → 12:14 у старих записах
 if(S.flights)S.flights.forEach(f=>{if(f.t1)f.t1=f.t1.replace(/[.,]/g,':');if(f.t2)f.t2=f.t2.replace(/[.,]/g,':');});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function logStock(action,kind,name,delta,note){
+  if(!S.stockLog)S.stockLog=[];
+  S.stockLog.unshift({id:uid(),ts:Date.now(),action,kind,name,delta:delta||0,note:note||''});
+  if(S.stockLog.length>500)S.stockLog.length=500;
+}
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 const fmtDate=iso=>{const[y,m,d]=iso.split('-');return d+'.'+m+'.'+y;};
 const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
@@ -320,13 +351,17 @@ function addStock(){
     const ex=S[stockKind].find(i=>i.name.toLowerCase()===n.toLowerCase()&&!i.sn);
     if(ex)ex.qty+=q;else S[stockKind].push({id:uid(),name:n,qty:q});
   }
+  logStock('додано',stockKind,n,q||1,sn?'SN: '+sn:'');
   document.getElementById('s-name').value='';document.getElementById('s-qty').value=1;
   if(stockKind==='gear')document.getElementById('s-sn').value='';
   save();renderStock();fillSelects();
 }
 function chQty(kind,id,d){
   const it=S[kind].find(i=>i.id===id);if(!it)return;
-  it.qty=Math.max(0,it.qty+d);save();renderStock();fillSelects();
+  const old=it.qty;
+  it.qty=Math.max(0,it.qty+d);
+  if(it.qty!==old)logStock('коригування',kind,it.name,it.qty-old,'вручну');
+  save();renderStock();fillSelects();
 }
 function delStock(kind,id){
   const it=S[kind].find(i=>i.id===id);
@@ -427,8 +462,8 @@ function saveFlight(){
     if(old){restoreStock(old);}
   }
   // списання
-  if(lost&&drone)drone.qty=Math.max(0,drone.qty-1);
-  if(ammo&&aq>0)ammo.qty=Math.max(0,ammo.qty-aq);
+  if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);logStock('списано (виліт)','drones',drone.name,-1,date);}
+  if(ammo&&aq>0){ammo.qty=Math.max(0,ammo.qty-aq);logStock('списано (виліт)','ammo',ammo.name,-aq,date);}
 
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
     droneId,droneName:drone.name,lost,
@@ -518,11 +553,21 @@ function dupFlight(id){
 function renderFlights(){
   const date=document.getElementById('f-date').value||todayISO();
   document.getElementById('fly-day-label').textContent=fmtDate(date);
-  const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  const q=(document.getElementById('fly-search')?.value||'').trim().toLowerCase();
+  let arr, header;
+  if(q){
+    arr=S.flights.filter(f=>{
+      const hay=[f.droneName,f.target,f.grid,f.result,f.ammoName,f.loss,fmtDate(f.date)].join(' ').toLowerCase();
+      return hay.includes(q);
+    }).sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}));
+    document.getElementById('fly-day-label').textContent=`пошук: ${arr.length}`;
+  }else{
+    arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  }
   const el=document.getElementById('fly-list');
-  if(!arr.length){el.innerHTML='<div class="empty">Вильотів за цю дату немає</div>';return;}
+  if(!arr.length){el.innerHTML='<div class="empty">'+(q?'Нічого не знайдено':'Вильотів за цю дату немає')+'</div>';return;}
   el.innerHTML=arr.map(f=>`<div class="fl">
-    <div class="hd"><span class="tm">${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName)}</span></div>
+    <div class="hd"><span class="tm">${q?esc(fmtDate(f.date))+' ':''}${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName)}</span></div>
     <div class="txt">${esc(flightText(f))}</div>
     <div class="acts">
       <button onclick="copyFlight('${f.id}')">📋 Копіювати</button>
@@ -685,6 +730,38 @@ function renderStats(){
   document.getElementById('stats-drones').innerHTML=Object.keys(dUse).length?
     Object.entries(dUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
     :'<div class="empty">Немає даних</div>';
+
+  // Наліт по дронах: вильотів + влучань
+  const dStat={};
+  arr.forEach(f=>{
+    const n=f.droneName||'—';
+    if(!dStat[n])dStat[n]={fl:0,hit:0};
+    dStat[n].fl++;
+    if(/влуч|ураж/i.test(f.result))dStat[n].hit++;
+  });
+  const dEntries=Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl);
+  document.getElementById('stats-topdrone').innerHTML=dEntries.length?
+    dEntries.map(([n,s])=>{
+      const pct=s.fl?Math.round(s.hit/s.fl*100):0;
+      return `<div class="item"><div class="nm">${esc(n)}</div><div class="qty" style="min-width:auto">${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}%)</span></div></div>`;
+    }).join('')
+    :'<div class="empty">Немає даних</div>';
+
+  // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
+  const aStat={};
+  arr.forEach(f=>{
+    if(!f.ammoName)return;
+    if(!aStat[f.ammoName])aStat[f.ammoName]={fl:0,hit:0};
+    aStat[f.ammoName].fl++;
+    if(/влуч|ураж/i.test(f.result))aStat[f.ammoName].hit++;
+  });
+  const aEntries=Object.entries(aStat).sort((a,b)=>(b[1].hit/b[1].fl)-(a[1].hit/a[1].fl));
+  document.getElementById('stats-ammoeff').innerHTML=aEntries.length?
+    aEntries.map(([n,s])=>{
+      const pct=s.fl?Math.round(s.hit/s.fl*100):0;
+      return `<div class="item"><div class="nm">${esc(cap(n))}</div><div class="qty" style="min-width:auto">${pct}% <span style="color:var(--muted);font-size:13px">(${s.hit}/${s.fl})</span></div></div>`;
+    }).join('')
+    :'<div class="empty">Немає даних</div>';
 }
 function daysSpan(arr){
   if(!arr.length)return 7;
@@ -716,9 +793,55 @@ function drawChart(arr,days){
   });
 }
 
+/* ===== period export / stock log / theme ===== */
+function exportPeriod(){
+  const from=document.getElementById('exp-from').value;
+  const to=document.getElementById('exp-to').value;
+  if(!from||!to){toast('Вкажи обидві дати');return;}
+  const lo=from<=to?from:to, hi=from<=to?to:from;
+  const dates=[...new Set(S.flights.filter(f=>f.date>=lo&&f.date<=hi).map(f=>f.date))].sort();
+  const out=document.getElementById('exp-out');
+  if(!dates.length){out.innerHTML='<div class="empty">За період вильотів немає</div>';return;}
+  const parts=dates.map(d=>buildReport(d)).filter(Boolean);
+  const text=parts.join('\n\n══════════════════\n\n');
+  out.innerHTML=`<textarea class="report" style="width:100%;min-height:160px" id="exp-text"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('exp-text').value)">📋 Скопіювати все (${dates.length} дн.)</button>`;
+  document.getElementById('exp-text').value=text;
+}
+function toggleStockLog(){
+  const el=document.getElementById('stock-log');
+  if(el.style.display==='none'){el.style.display='block';renderStockLog();}
+  else el.style.display='none';
+}
+function renderStockLog(){
+  const el=document.getElementById('stock-log');
+  const log=S.stockLog||[];
+  if(!log.length){el.innerHTML='<div class="empty">Лог порожній</div>';return;}
+  const kindName={ammo:'БК',drones:'Дрон',gear:'Майно'};
+  el.innerHTML=log.slice(0,100).map(e=>{
+    const dt=new Date(e.ts);
+    const ds=String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+' '+
+      String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+    const sign=e.delta>0?'+'+e.delta:e.delta;
+    const col=e.delta>0?'var(--green)':e.delta<0?'var(--red)':'var(--muted)';
+    return `<div class="item"><div class="nm" style="font-size:14px">
+      <span style="color:var(--muted);font-family:var(--mono);font-size:12px">${ds}</span> · ${esc(e.action)}<br>
+      ${kindName[e.kind]||e.kind}: ${esc(e.name)}${e.note?' <span style="color:var(--muted);font-size:12px">('+esc(e.note)+')</span>':''}
+    </div><div class="qty" style="color:${col}">${sign}</div></div>`;
+  }).join('');
+}
+function applyTheme(){
+  const light=S.settings.theme==='light';
+  document.documentElement.classList.toggle('light',light);
+}
+function toggleTheme(){
+  S.settings.theme=S.settings.theme==='light'?'dark':'light';
+  save();applyTheme();
+  document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'🌙 Темна тема':'☀ Світла тема';
+}
+
 /* ===== init ===== */
-function renderAll(){fillSelects();renderStock();renderFlights();renderReport();}
-// відступ знизу = реальна висота меню + запас (працює при будь-якому масштабі шрифту)
+function renderAll(){fillSelects();renderStock();renderFlights();renderReport();}// відступ знизу = реальна висота меню + запас (працює при будь-якому масштабі шрифту)
 function fitBottomPad(){
   const nav=document.getElementById('nav');
   document.body.style.paddingBottom=(nav.offsetHeight+72)+'px';
@@ -728,6 +851,11 @@ window.addEventListener('load',fitBottomPad);
 fitBottomPad();setTimeout(fitBottomPad,300);setTimeout(fitBottomPad,1200);
 document.getElementById('f-date').value=todayISO();
 document.getElementById('r-date').value=todayISO();
+applyTheme();
+document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'🌙 Темна тема':'☀ Світла тема';
+(function(){const t=todayISO();const d=new Date(t);d.setDate(d.getDate()-6);
+  const wk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('exp-from').value=wk;document.getElementById('exp-to').value=t;})();
 renderAll();
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 
