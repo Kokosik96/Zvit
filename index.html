@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v24</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v25</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -465,6 +465,22 @@ function chQty(kind,id,d){
   if(it.qty!==old)logStock('коригування',kind,it.name,it.qty-old,'вручну');
   save();renderStock();fillSelects();
 }
+function bulkQty(kind,id){
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  const ans=prompt(`«${it.name}» — зараз ${it.qty} шт.\nВведи зміну: +5 (додати) або -3 (відняти):`);
+  if(ans===null)return;
+  const d=parseInt(ans.replace(/\s+/g,''));
+  if(isNaN(d)||d===0){toast('Введи число, напр. +5 або -3');return;}
+  const old=it.qty;
+  it.qty=Math.max(0,it.qty+d);
+  const applied=it.qty-old;
+  if(applied!==0){
+    logStock('коригування',kind,it.name,applied,'пакетно');
+    if(applied!==d)toast(`Застосовано ${applied} (менше нуля не можна)`);
+    else toast(`${it.name}: ${old} → ${it.qty}`);
+  }
+  save();renderStock();fillSelects();
+}
 function delStock(kind,id){
   const it=S[kind].find(i=>i.id===id);
   if(!confirm('Видалити «'+it.name+'» зі складу?'))return;
@@ -488,8 +504,11 @@ function saveStockEdit(){
   const n=document.getElementById('e-name').value.trim();
   if(!n){toast('Назва не може бути порожньою');return;}
   const oldName=it.name;
+  const oldQty=it.qty;
   it.name=n;
   it.qty=Math.max(0,parseInt(document.getElementById('e-qty').value)||0);
+  if(it.qty!==oldQty)logStock('коригування',kind,n,it.qty-oldQty,'через редагування');
+  if(oldName!==n)logStock('перейменовано',kind,n,0,'було: '+oldName);
   if(kind==='gear'){const sn=document.getElementById('e-sn').value.trim();if(sn)it.sn=sn;else delete it.sn;}
   // оновлюємо назву в минулих вильотах, щоб звіти лишались коректними
   if(oldName!==n){
@@ -531,7 +550,7 @@ function renderStock(){
     return `<div class="item ${isLow?'low':''}">
     <div class="nm">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">SN: ${esc(i.sn)}</div>`:''}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
-    <div class="qty ${i.qty===0?'zero':isLow?'low':''}">${i.qty}</div>
+    <div class="qty ${i.qty===0?'zero':isLow?'low':''}" onclick="bulkQty('${stockKind}','${i.id}')" style="cursor:pointer;text-decoration:underline dotted var(--muted)">${i.qty}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
     <button class="del" style="color:var(--muted)" onclick="editStock('${stockKind}','${i.id}')">✎</button>
     <button class="del" onclick="delStock('${stockKind}','${i.id}')">✕</button>
