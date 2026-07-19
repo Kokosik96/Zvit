@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v21</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v22</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -923,9 +923,10 @@ function drawChart(arr,days){
   }
   const max=Math.max(1,...counts);
   const pad=8*devicePixelRatio,bw=(W-pad*2)/counts.length;
+  const topPad=16*devicePixelRatio;
   ctx.fillStyle='#8b94a0';ctx.font=(10*devicePixelRatio)+'px monospace';ctx.textAlign='center';
   counts.forEach((c,i)=>{
-    const h=(H-30*devicePixelRatio)*(c/max);
+    const h=(H-30*devicePixelRatio-topPad)*(c/max);
     const x=pad+i*bw;
     ctx.fillStyle=c?'#b6c46a':'#2a323d';
     ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-h,bw*.7,Math.max(h,2*devicePixelRatio));
@@ -995,11 +996,12 @@ function drawHoursChart(arr){
   });
   const max=Math.max(1,...hours);
   const pad=8*devicePixelRatio,bw=(W-pad*2)/24;
+  const topPad=10*devicePixelRatio;
   ctx.font=(9*devicePixelRatio)+'px monospace';ctx.textAlign='center';
   for(let h=0;h<24;h++){
     const x=pad+h*bw;
-    const bh=(H-30*devicePixelRatio)*(hours[h]/max);
-    const hh=(H-30*devicePixelRatio)*(hits[h]/max);
+    const bh=(H-30*devicePixelRatio-topPad)*(hours[h]/max);
+    const hh=(H-30*devicePixelRatio-topPad)*(hits[h]/max);
     ctx.fillStyle=hours[h]?'#3a4224':'#2a323d';
     ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-bh,bw*.7,Math.max(bh,2*devicePixelRatio));
     if(hits[h]){ctx.fillStyle='#7fbf7a';ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-hh,bw*.7,hh);}
