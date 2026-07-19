@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v22</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v23</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -858,10 +858,20 @@ function renderStats(){
   const days=statDays||Math.min(60,daysSpan(arr));
   drawChart(arr,days);
   drawHoursChart(arr);
-  // results breakdown
-  const byRes={};arr.forEach(f=>byRes[f.result]=(byRes[f.result]||0)+1);
+  // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив ×2 (5 км, 13 км)"
+  const byRes={};
+  arr.forEach(f=>{
+    const raw=(f.result||'—').trim();
+    const base=cap(raw.split('(')[0].trim().toLowerCase())||'—';
+    const m=raw.match(/\(([^)]*)\)/);
+    if(!byRes[base])byRes[base]={n:0,det:[]};
+    byRes[base].n++;
+    if(m&&m[1].trim())byRes[base].det.push(m[1].trim());
+  });
   document.getElementById('stats-res').innerHTML=Object.keys(byRes).length?
-    Object.entries(byRes).sort((a,b)=>b[1]-a[1]).map(([r,c])=>`<div class="item"><div class="nm">${esc(r)}</div><div class="qty">${c}</div></div>`).join('')
+    Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n).map(([r,o])=>
+      `<div class="item"><div class="nm">${esc(r)}${o.det.length?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(o.det.join(', '))}</div>`:''}</div><div class="qty">${o.n}</div></div>`
+    ).join('')
     :'<div class="empty">Немає даних</div>';
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
   document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
