@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v25</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.26</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -580,7 +580,12 @@ function flightText(f){
     `Втрати противника: ${f.loss||'уточнюються'}`;
 }
 
-const normTime=s=>s.replace(/[.,]/g,':');
+const normTime=s=>{
+  s=s.replace(/[.,]/g,':').trim();
+  if(!s.includes(':')&&/^\d{3,4}$/.test(s))s=s.slice(0,-2)+':'+s.slice(-2);
+  return s;
+};
+const looksLikeMgrs=g=>/^\d{1,2}\s?[A-Za-z]\s?[A-Za-z]{2}\s?\d{4,5}\s?\d{4,5}$/.test(g.trim());
 function saveFlight(){
   const date=document.getElementById('f-date').value||todayISO();
   const t1=normTime(document.getElementById('f-t1').value.trim());
@@ -598,6 +603,15 @@ function saveFlight(){
   if(!droneId){toast('Обери дрон зі складу');return;}
   const drone=S.drones.find(i=>i.id===droneId);
   const ammo=ammoId?S.ammo.find(i=>i.id===ammoId):null;
+  if(!editId&&lost&&drone&&drone.qty===0){
+    if(!confirm(`«${drone.name}» — на складі 0 шт.\nСписати не буде з чого. Зберегти виліт як є?`))return;
+  }
+  if(!editId&&ammo&&aq>ammo.qty){
+    if(!confirm(`«${ammo.name}» — на складі ${ammo.qty}, а списується ${aq}.\nСпишеться лише ${ammo.qty}. Продовжити?`))return;
+  }
+  if(grid&&!looksLikeMgrs(grid)){
+    if(!confirm(`Квадрат «${grid}» виглядає незвично для MGRS (зразок: 37U CR 50156 68752).\nЗберегти як є?`))return;
+  }
 
   if(editId){ // повертаємо старі списання
     const old=S.flights.find(x=>x.id===editId);
