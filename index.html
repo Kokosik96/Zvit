@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.26</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.27</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -449,6 +449,14 @@ function addStock(){
   if(stockKind==='gear')document.getElementById('s-sn').value='';
   save();renderStock();fillSelects();
 }
+function nbgToTech(id){
+  const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
+  if(!confirm(`Передати «${it.name}» технікам? (1 шт. з ${it.qty})`))return;
+  it.qty--;
+  logStock('передано на технічку','drones',it.name,-1,'з не БГ');
+  if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();toast('Передано технікам: '+it.name);
+}
 function nbgReturn(id){
   const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
   it.qty--;
@@ -483,7 +491,9 @@ function bulkQty(kind,id){
 }
 function delStock(kind,id){
   const it=S[kind].find(i=>i.id===id);
+  if(!it)return;
   if(!confirm('Видалити «'+it.name+'» зі складу?'))return;
+  logStock('видалено з обліку',kind,it.name,-it.qty,it.sn?'SN: '+it.sn:'');
   S[kind]=S[kind].filter(i=>i.id!==id);save();renderStock();fillSelects();
 }
 let editStockRef=null;
@@ -539,7 +549,7 @@ function renderStock(){
       <div class="nm">${esc(i.name)}</div>
       <div class="qty" style="color:var(--red)">${i.qty}</div>
       <button class="del" style="color:var(--green);width:auto;padding:0 10px" onclick="nbgReturn('${i.id}')">↩ у стрій</button>
-      <button class="del" onclick="delStock('nbg','${i.id}')">✕</button>
+      <button class="del" style="color:var(--amber);width:auto;padding:0 10px" onclick="nbgToTech('${i.id}')">🔧 технічка</button>
     </div>`).join('');
     return;
   }
