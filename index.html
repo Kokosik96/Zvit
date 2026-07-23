@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.27</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.29</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -247,6 +247,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Позиція БпЛА</label><input id="set-pos" placeholder="СОНЕЧКО">
   <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
   <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
+  <label>Скільки копій тримати в папці</label><input id="set-keep" type="number" min="1" max="10" value="3" inputmode="numeric">
   <button class="btn sec" id="theme-btn" onclick="toggleTheme()">☀ Світла тема</button>
   <button class="btn" onclick="saveSettings()">Зберегти</button>
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
@@ -347,6 +348,7 @@ function openSettings(){
   document.getElementById('set-pos').value=S.settings.position;
   document.getElementById('set-crew').value=S.settings.crew||'';
   document.getElementById('set-low').value=S.settings.lowThreshold??2;
+  document.getElementById('set-keep').value=S.settings.keepBackups??3;
   const fi=document.getElementById('folder-info');
   if(S.settings.fileBackup==='folder')fi.textContent='✓ Автобекап у папку: раз на день'+(S.lastFileBackup?' (останній: '+fmtDate(S.lastFileBackup)+')':'');
   else if(S.settings.fileBackup==='dialog')fi.textContent='Автобекап через діалог збереження, раз на день';
@@ -358,7 +360,9 @@ function saveSettings(){
   S.settings.position=document.getElementById('set-pos').value.trim();
   S.settings.crew=document.getElementById('set-crew').value.trim();
   S.settings.lowThreshold=Math.max(0,parseInt(document.getElementById('set-low').value)||0);
+  S.settings.keepBackups=Math.min(10,Math.max(1,parseInt(document.getElementById('set-keep').value)||3));
   save();dlgSet.close();toast('Збережено');
+  if(S.settings.fileBackup==='folder')cleanOldBackups(S.settings.keepBackups);
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
@@ -530,7 +534,8 @@ function saveStockEdit(){
   save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
 }
 function renderStock(){
-  const arr=S[stockKind];const el=document.getElementById('stock-list');
+  const arr=S[stockKind].slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
+  const el=document.getElementById('stock-list');
   // підказка назв дронів у формі для Не БГ
   const nameInp=document.getElementById('s-name');
   if(stockKind==='nbg'){
@@ -766,6 +771,7 @@ document.getElementById('r-losses').addEventListener('input',()=>{
   if(ta){const t=buildReport(date);if(t){ta.value=t;ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';}}
 });
 function buildStockReport(date){
+  const bySort=a=>a.slice().sort((x,y)=>y.qty-x.qty||x.name.localeCompare(y.name,'uk'));
   let lines=[];
   lines.push(fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
@@ -774,15 +780,15 @@ function buildStockReport(date){
   lines.push('');
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
-  const ammo=S.ammo.filter(i=>i.qty>0);
+  const ammo=bySort(S.ammo.filter(i=>i.qty>0));
   if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
   else lines.push('•—');
   lines.push('');
   lines.push('ДРОНИ ОПТОВОЛОКНО:');
-  const dr=S.drones.filter(i=>i.qty>0);
+  const dr=bySort(S.drones.filter(i=>i.qty>0));
   if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
   else lines.push('•—');
-  const nbg=(S.nbg||[]).filter(i=>i.qty>0);
+  const nbg=bySort((S.nbg||[]).filter(i=>i.qty>0));
   if(nbg.length){
     lines.push('');
     lines.push('НЕ БГ:');
@@ -793,7 +799,7 @@ function buildStockReport(date){
   lines.push('');
   lines.push('ОБЛАДНАННЯ:');
   lines.push('');
-  const gr=S.gear.filter(i=>i.qty>0);
+  const gr=bySort(S.gear.filter(i=>i.qty>0));
   if(gr.length)gr.forEach(i=>{
     if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} шт.`:''));
     else lines.push(`•${i.name} - ${i.qty} шт.`);
@@ -884,6 +890,13 @@ document.getElementById('stats-seg').addEventListener('click',e=>{
   document.querySelectorAll('#stats-seg button').forEach(x=>x.classList.toggle('on',x===b));
   renderStats();
 });
+let statsResOpen=null, statsResGroups={}, statsResKeys=[];
+function toggleResGroup(idx){
+  const r=statsResKeys[idx];
+  if(r===undefined)return;
+  statsResOpen=(statsResOpen===r)?null:r;
+  renderStats();
+}
 function renderStats(){
   const now=new Date(todayISO());
   const from=statDays?new Date(now.getTime()-(statDays-1)*864e5):null;
@@ -901,21 +914,36 @@ function renderStats(){
   const days=statDays||Math.min(60,daysSpan(arr));
   drawChart(arr,days);
   drawHoursChart(arr);
-  // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив ×2 (5 км, 13 км)"
+  // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив" з підписом дистанцій
   const byRes={};
   arr.forEach(f=>{
     const raw=(f.result||'—').trim();
     const base=cap(raw.split('(')[0].trim().toLowerCase())||'—';
     const m=raw.match(/\(([^)]*)\)/);
-    if(!byRes[base])byRes[base]={n:0,det:[]};
+    if(!byRes[base])byRes[base]={n:0,det:[],fl:[]};
     byRes[base].n++;
+    byRes[base].fl.push(f);
     if(m&&m[1].trim())byRes[base].det.push(m[1].trim());
   });
-  document.getElementById('stats-res').innerHTML=Object.keys(byRes).length?
-    Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n).map(([r,o])=>{
+  statsResGroups=byRes;
+  const resEntries=Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n);
+  statsResKeys=resEntries.map(e=>e[0]);
+  document.getElementById('stats-res').innerHTML=resEntries.length?
+    resEntries.map(([r,o],idx)=>{
       const dc={};o.det.forEach(d=>dc[d]=(dc[d]||0)+1);
       const detStr=Object.entries(dc).map(([d,c])=>c>1?`${d} ×${c}`:d).join(', ');
-      return `<div class="item"><div class="nm">${esc(r)}${detStr?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(detStr)}</div>`:''}</div><div class="qty">${o.n}</div></div>`;
+      const open=statsResOpen===r;
+      return `<div class="item" onclick="toggleResGroup(${idx})" style="cursor:pointer">
+        <div class="nm">${esc(r)}${detStr?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(detStr)}</div>`:''}</div>
+        <div class="qty">${o.n}</div>
+        <div style="color:var(--muted);font-size:13px;width:18px;text-align:center">${open?'▲':'▼'}</div>
+      </div>
+      ${open?`<div style="margin:-4px 0 10px 10px;padding-left:10px;border-left:2px solid var(--line)">${
+        o.fl.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
+        .map(f=>`<div class="fl" style="margin-bottom:6px">
+          <div class="hd"><span class="tm">${esc(fmtDate(f.date))} ${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName||'—')}</span></div>
+          <div class="txt" style="font-size:13px">${esc(flightText(f))}</div>
+        </div>`).join('')}</div>`:''}`;
     }).join('')
     :'<div class="empty">Немає даних</div>';
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
@@ -1129,6 +1157,20 @@ async function ensureDirPermission(){
   }catch(e){}
   return false;
 }
+async function cleanOldBackups(keep){
+  if(!backupDirHandle)return;
+  try{
+    const files=[];
+    for await(const [name,h] of backupDirHandle.entries()){
+      if(h.kind==='file'&&/^zvit-fpv-backup-\d{4}-\d{2}-\d{2}\.json$/.test(name))files.push(name);
+    }
+    files.sort(); // назва містить дату → сортування = хронологія
+    while(files.length>keep){
+      const oldName=files.shift();
+      try{await backupDirHandle.removeEntry(oldName);}catch(e){}
+    }
+  }catch(e){}
+}
 async function writeFileBackup(force){
   const mode=S.settings.fileBackup;
   if(!mode)return;
@@ -1144,6 +1186,7 @@ async function writeFileBackup(force){
       await w.write(json);await w.close();
       S.lastFileBackup=today;
       try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+      await cleanOldBackups(S.settings.keepBackups||3);
     }catch(e){}
   }else if(mode==='dialog'&&force){
     exportData();
