@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.31</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.32</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -163,7 +163,6 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h2>Вильоти за <span id="fly-day-label"></span></h2>
   <input id="fly-search" placeholder="🔍 пошук: дрон, ціль, квадрат, результат…" oninput="renderFlights()" style="margin-bottom:10px">
   <div id="fly-list"></div>
-  <div id="pending-losses"></div>
   <h2>Нотатки дня (не йдуть у звіт)</h2>
   <textarea id="day-notes" placeholder="погода, РЕБ-обстановка, особливості…" oninput="saveDayNotes()"></textarea>
 </section>
@@ -793,31 +792,6 @@ function saveDayNotes(){
   clearTimeout(dayNotesTimer);
   dayNotesTimer=setTimeout(()=>save(),500);
 }
-function renderPendingLosses(){
-  const el=document.getElementById('pending-losses');
-  if(!el)return;
-  const pend=S.flights.filter(f=>!(f.loss||'').trim()||/^уточн/i.test((f.loss||'').trim()))
-    .sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
-    .slice(0,30);
-  if(!pend.length){el.innerHTML='';return;}
-  el.innerHTML=`<h2>Втрати не уточнені (${pend.length})</h2>`+
-    pend.map(f=>`<div class="item">
-      <div class="nm" style="font-size:14px">
-        <span style="color:var(--muted);font-family:var(--mono);font-size:12.5px">${esc(fmtDate(f.date))} ${esc(f.t1)}</span>
-        · ${esc(f.droneName||'—')}<br>
-        <span style="color:var(--muted);font-size:12.5px">${esc(f.grid||'')} · ${esc(f.result||'')}</span>
-      </div>
-      <button class="del" style="color:var(--accent);width:auto;padding:0 12px" onclick="setLoss('${f.id}')">вписати</button>
-    </div>`).join('');
-}
-function setLoss(id){
-  const f=S.flights.find(x=>x.id===id);if(!f)return;
-  const v=prompt(`Втрати противника\n${fmtDate(f.date)} ${f.t1} · ${f.grid||''}\n${f.result||''}`,f.loss||'');
-  if(v===null)return;
-  f.loss=v.trim();
-  save();renderFlights();
-  toast(f.loss?'Записано':'Очищено');
-}
 function renderFlights(){
   const date=document.getElementById('f-date').value||todayISO();
   document.getElementById('fly-day-label').textContent=fmtDate(date);
@@ -827,7 +801,6 @@ function renderFlights(){
   if(fc&&document.activeElement!==fc)fc.value=crewFor(date);
   fillCrewOpts();
   fillHistoryOpts();
-  renderPendingLosses();
   const q=(document.getElementById('fly-search')?.value||'').trim().toLowerCase();
   let arr, header;
   if(q){
