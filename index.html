@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.29</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.30</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -890,12 +890,33 @@ document.getElementById('stats-seg').addEventListener('click',e=>{
   document.querySelectorAll('#stats-seg button').forEach(x=>x.classList.toggle('on',x===b));
   renderStats();
 });
-let statsResOpen=null, statsResGroups={}, statsResKeys=[];
-function toggleResGroup(idx){
-  const r=statsResKeys[idx];
-  if(r===undefined)return;
-  statsResOpen=(statsResOpen===r)?null:r;
+let openGroups={res:null,drone:null,ammo:null};
+let groupKeys={res:[],drone:[],ammo:[]};
+function toggleGroup(section,idx){
+  const k=groupKeys[section][idx];
+  if(k===undefined)return;
+  openGroups[section]=(openGroups[section]===k)?null:k;
   renderStats();
+}
+// entries: [ключ, {fl:[вильоти], right:'HTML праворуч', sub:'дрібний підпис'}]
+function renderGroups(elId,section,entries){
+  groupKeys[section]=entries.map(e=>e[0]);
+  const el=document.getElementById(elId);
+  if(!entries.length){el.innerHTML='<div class="empty">Немає даних</div>';return;}
+  el.innerHTML=entries.map(([k,o],idx)=>{
+    const open=openGroups[section]===k;
+    return `<div class="item" onclick="toggleGroup('${section}',${idx})" style="cursor:pointer">
+      <div class="nm">${esc(k)}${o.sub?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(o.sub)}</div>`:''}</div>
+      <div class="qty" style="min-width:auto">${o.right}</div>
+      <div style="color:var(--muted);font-size:13px;width:18px;text-align:center">${open?'▲':'▼'}</div>
+    </div>
+    ${open?`<div style="margin:-4px 0 10px 10px;padding-left:10px;border-left:2px solid var(--line)">${
+      o.fl.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
+      .map(f=>`<div class="fl" style="margin-bottom:6px">
+        <div class="hd"><span class="tm">${esc(fmtDate(f.date))} ${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName||'—')}</span></div>
+        <div class="txt" style="font-size:13px">${esc(flightText(f))}</div>
+      </div>`).join('')}</div>`:''}`;
+  }).join('');
 }
 function renderStats(){
   const now=new Date(todayISO());
@@ -925,27 +946,12 @@ function renderStats(){
     byRes[base].fl.push(f);
     if(m&&m[1].trim())byRes[base].det.push(m[1].trim());
   });
-  statsResGroups=byRes;
-  const resEntries=Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n);
-  statsResKeys=resEntries.map(e=>e[0]);
-  document.getElementById('stats-res').innerHTML=resEntries.length?
-    resEntries.map(([r,o],idx)=>{
-      const dc={};o.det.forEach(d=>dc[d]=(dc[d]||0)+1);
-      const detStr=Object.entries(dc).map(([d,c])=>c>1?`${d} ×${c}`:d).join(', ');
-      const open=statsResOpen===r;
-      return `<div class="item" onclick="toggleResGroup(${idx})" style="cursor:pointer">
-        <div class="nm">${esc(r)}${detStr?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(detStr)}</div>`:''}</div>
-        <div class="qty">${o.n}</div>
-        <div style="color:var(--muted);font-size:13px;width:18px;text-align:center">${open?'▲':'▼'}</div>
-      </div>
-      ${open?`<div style="margin:-4px 0 10px 10px;padding-left:10px;border-left:2px solid var(--line)">${
-        o.fl.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
-        .map(f=>`<div class="fl" style="margin-bottom:6px">
-          <div class="hd"><span class="tm">${esc(fmtDate(f.date))} ${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName||'—')}</span></div>
-          <div class="txt" style="font-size:13px">${esc(flightText(f))}</div>
-        </div>`).join('')}</div>`:''}`;
-    }).join('')
-    :'<div class="empty">Немає даних</div>';
+  const resEntries=Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n).map(([r,o])=>{
+    const dc={};o.det.forEach(d=>dc[d]=(dc[d]||0)+1);
+    const sub=Object.entries(dc).map(([d,c])=>c>1?`${d} ×${c}`:d).join(', ');
+    return [r,{fl:o.fl,right:String(o.n),sub}];
+  });
+  renderGroups('stats-res','res',resEntries);
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
   document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
     Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
@@ -959,33 +965,29 @@ function renderStats(){
   const dStat={};
   arr.forEach(f=>{
     const n=f.droneName||'—';
-    if(!dStat[n])dStat[n]={fl:0,hit:0};
-    dStat[n].fl++;
+    if(!dStat[n])dStat[n]={fl:0,hit:0,list:[]};
+    dStat[n].fl++;dStat[n].list.push(f);
     if(/влуч|ураж/i.test(f.result))dStat[n].hit++;
   });
-  const dEntries=Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl);
-  document.getElementById('stats-topdrone').innerHTML=dEntries.length?
-    dEntries.map(([n,s])=>{
+  renderGroups('stats-topdrone','drone',
+    Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl).map(([n,s])=>{
       const pct=s.fl?Math.round(s.hit/s.fl*100):0;
-      return `<div class="item"><div class="nm">${esc(n)}</div><div class="qty" style="min-width:auto">${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}%)</span></div></div>`;
-    }).join('')
-    :'<div class="empty">Немає даних</div>';
+      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}%)</span>`,sub:''}];
+    }));
 
   // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
   const aStat={};
   arr.forEach(f=>{
     if(!f.ammoName)return;
-    if(!aStat[f.ammoName])aStat[f.ammoName]={fl:0,hit:0};
-    aStat[f.ammoName].fl++;
+    if(!aStat[f.ammoName])aStat[f.ammoName]={fl:0,hit:0,list:[]};
+    aStat[f.ammoName].fl++;aStat[f.ammoName].list.push(f);
     if(/влуч|ураж/i.test(f.result))aStat[f.ammoName].hit++;
   });
-  const aEntries=Object.entries(aStat).sort((a,b)=>(b[1].hit/b[1].fl)-(a[1].hit/a[1].fl));
-  document.getElementById('stats-ammoeff').innerHTML=aEntries.length?
-    aEntries.map(([n,s])=>{
+  renderGroups('stats-ammoeff','ammo',
+    Object.entries(aStat).sort((a,b)=>(b[1].hit/b[1].fl)-(a[1].hit/a[1].fl)).map(([n,s])=>{
       const pct=s.fl?Math.round(s.hit/s.fl*100):0;
-      return `<div class="item"><div class="nm">${esc(cap(n))}</div><div class="qty" style="min-width:auto">${pct}% <span style="color:var(--muted);font-size:13px">(${s.hit}/${s.fl})</span></div></div>`;
-    }).join('')
-    :'<div class="empty">Немає даних</div>';
+      return [cap(n),{fl:s.list,right:`${pct}% <span style="color:var(--muted);font-size:13px">(${s.hit}/${s.fl})</span>`,sub:''}];
+    }));
 }
 function daysSpan(arr){
   if(!arr.length)return 7;
