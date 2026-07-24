@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.30</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.31</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -103,6 +103,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div class="row">
       <div><label>Дата</label><input type="date" id="f-date"></div>
     </div>
+    <div class="row">
+      <div><label>Екіпаж на цю дату</label><input id="f-crew" list="crew-opts" placeholder="позивні через кому" oninput="saveDayCrew()"></div>
+    </div>
+    <datalist id="crew-opts"></datalist>
     <div class="row">
       <div><label>Час зльоту</label><input id="f-t1" placeholder="12:14" inputmode="decimal"></div>
       <div><label>Час посадки</label><input id="f-t2" placeholder="12:24" inputmode="decimal"></div>
@@ -122,7 +126,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option value="позиції противника"></option>
       <option value="Розвідка"></option>
     </datalist>
-    <label>Район (квадрат)</label><input id="f-grid" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
+    <label>Район (квадрат)</label><input id="f-grid" list="grid-opts" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
+    <datalist id="grid-opts"></datalist>
     <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
     <datalist id="loss-opts">
       <option value="уточнюються"></option>
@@ -137,13 +142,20 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option>Влучання в ціль</option>
       <option>Влучання в район цілі</option>
       <option>Ціль уражена</option>
+      <option>Ціль не знайдено</option>
       <option>Промах</option>
+      <option>Обрив</option>
+      <option>Зачеп</option>
+      <option>Нерозрив</option>
+      <option>Збиття в районі цілі</option>
       <option>Втрата керування</option>
       <option>Втрата дрона (РЕБ)</option>
       <option>Не виконано</option>
       <option value="_c">Інше…</option>
     </select>
     <input id="f-res-c" placeholder="свій варіант результату" style="display:none;margin-top:8px">
+    <label>Дистанція (якщо є, напр. 9 км)</label>
+    <input id="f-res-dist" placeholder="9 км" style="margin-bottom:4px">
     <button class="btn" onclick="saveFlight()">✚ Зберегти виліт</button>
     <button class="btn sec" id="f-cancel" style="display:none" onclick="cancelEdit()">Скасувати редагування</button>
   </div>
@@ -151,6 +163,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h2>Вильоти за <span id="fly-day-label"></span></h2>
   <input id="fly-search" placeholder="🔍 пошук: дрон, ціль, квадрат, результат…" oninput="renderFlights()" style="margin-bottom:10px">
   <div id="fly-list"></div>
+  <div id="pending-losses"></div>
   <h2>Нотатки дня (не йдуть у звіт)</h2>
   <textarea id="day-notes" placeholder="погода, РЕБ-обстановка, особливості…" oninput="saveDayNotes()"></textarea>
 </section>
@@ -614,6 +627,8 @@ function saveFlight(){
   const loss=document.getElementById('f-loss').value.trim();
   let res=document.getElementById('f-res').value;
   if(res==='_c')res=document.getElementById('f-res-c').value.trim()||'—';
+  const rdist=document.getElementById('f-res-dist').value.trim();
+  if(rdist)res=res+' ('+rdist+')';
   if(!t1||!t2){toast('Вкажи час зльоту і посадки');return;}
   if(!droneId){toast('Обери дрон зі складу');return;}
   const drone=S.drones.find(i=>i.id===droneId);
@@ -657,7 +672,7 @@ function restoreStock(f){
   if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);if(a)a.qty+=f.ammoQty;}
 }
 function clearForm(){
-  ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c'].forEach(i=>document.getElementById(i).value='');
+  ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
@@ -677,8 +692,16 @@ function editFlight(id){
   document.getElementById('f-grid').value=f.grid;
   document.getElementById('f-loss').value=f.loss||'';
   const sel=document.getElementById('f-res');
-  if([...sel.options].some(o=>o.value===f.result))sel.value=f.result;
-  else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=f.result;c.style.display='block';}
+  const rd=document.getElementById('f-res-dist');
+  const raw=f.result||'';
+  const m=raw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const base=m?m[1].trim():raw.trim();
+  const dist=m?m[2].trim():'';
+  if([...sel.options].some(o=>o.value===base)){sel.value=base;rd.value=dist;
+    document.getElementById('f-res-c').style.display='none';}
+  else if([...sel.options].some(o=>o.value===raw)){sel.value=raw;rd.value='';
+    document.getElementById('f-res-c').style.display='none';}
+  else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=base;c.style.display='block';rd.value=dist;}
   document.getElementById('f-cancel').style.display='block';
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -716,11 +739,51 @@ function dupFlight(id){
   document.getElementById('f-target').value=f.target||'';
   document.getElementById('f-grid').value=f.grid||'';
   document.getElementById('f-loss').value=f.loss||'';
-  const sel=document.getElementById('f-res');
-  if([...sel.options].some(o=>o.value===f.result))sel.value=f.result;
-  else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=f.result;c.style.display='block';}
+  const dsel=document.getElementById('f-res'),drd=document.getElementById('f-res-dist');
+  const draw=f.result||'';const dm=draw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const dbase=dm?dm[1].trim():draw.trim();
+  if([...dsel.options].some(o=>o.value===dbase)){dsel.value=dbase;
+    document.getElementById('f-res-c').style.display='none';}
+  else{dsel.value='_c';const c=document.getElementById('f-res-c');c.value=dbase;c.style.display='block';}
+  drd.value='';
   window.scrollTo({top:0,behavior:'smooth'});
   toast('Дані підставлено — впиши час і збережи');
+}
+let dayCrewTimer=null;
+function crewFor(date){
+  return (S.dayCrew&&S.dayCrew[date])||S.settings.crew||'';
+}
+function saveDayCrew(){
+  const date=document.getElementById('f-date').value||todayISO();
+  if(!S.dayCrew)S.dayCrew={};
+  const v=document.getElementById('f-crew').value.trim();
+  if(v)S.dayCrew[date]=v;else delete S.dayCrew[date];
+  clearTimeout(dayCrewTimer);
+  dayCrewTimer=setTimeout(()=>save(),500);
+}
+function fillCrewOpts(){
+  const dl=document.getElementById('crew-opts');
+  if(!dl)return;
+  const set=new Set();
+  if(S.settings.crew)set.add(S.settings.crew);
+  Object.values(S.dayCrew||{}).forEach(c=>{if(c)set.add(c);});
+  dl.innerHTML=[...set].map(c=>`<option value="${esc(c)}"></option>`).join('');
+}
+function fillHistoryOpts(){
+  const gd=document.getElementById('grid-opts');
+  if(gd){
+    const cnt={};
+    S.flights.forEach(f=>{if(f.grid)cnt[f.grid]=(cnt[f.grid]||0)+1;});
+    gd.innerHTML=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,40)
+      .map(([g])=>`<option value="${esc(g)}"></option>`).join('');
+  }
+  const td=document.getElementById('target-opts');
+  if(td){
+    const base=['живій силі противника','техніці противника','позиції противника','Розвідка'];
+    const set=new Set(base);
+    S.flights.forEach(f=>{if(f.target)set.add(f.target);});
+    td.innerHTML=[...set].map(t=>`<option value="${esc(t)}"></option>`).join('');
+  }
 }
 let dayNotesTimer=null;
 function saveDayNotes(){
@@ -730,11 +793,41 @@ function saveDayNotes(){
   clearTimeout(dayNotesTimer);
   dayNotesTimer=setTimeout(()=>save(),500);
 }
+function renderPendingLosses(){
+  const el=document.getElementById('pending-losses');
+  if(!el)return;
+  const pend=S.flights.filter(f=>!(f.loss||'').trim()||/^уточн/i.test((f.loss||'').trim()))
+    .sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
+    .slice(0,30);
+  if(!pend.length){el.innerHTML='';return;}
+  el.innerHTML=`<h2>Втрати не уточнені (${pend.length})</h2>`+
+    pend.map(f=>`<div class="item">
+      <div class="nm" style="font-size:14px">
+        <span style="color:var(--muted);font-family:var(--mono);font-size:12.5px">${esc(fmtDate(f.date))} ${esc(f.t1)}</span>
+        · ${esc(f.droneName||'—')}<br>
+        <span style="color:var(--muted);font-size:12.5px">${esc(f.grid||'')} · ${esc(f.result||'')}</span>
+      </div>
+      <button class="del" style="color:var(--accent);width:auto;padding:0 12px" onclick="setLoss('${f.id}')">вписати</button>
+    </div>`).join('');
+}
+function setLoss(id){
+  const f=S.flights.find(x=>x.id===id);if(!f)return;
+  const v=prompt(`Втрати противника\n${fmtDate(f.date)} ${f.t1} · ${f.grid||''}\n${f.result||''}`,f.loss||'');
+  if(v===null)return;
+  f.loss=v.trim();
+  save();renderFlights();
+  toast(f.loss?'Записано':'Очищено');
+}
 function renderFlights(){
   const date=document.getElementById('f-date').value||todayISO();
   document.getElementById('fly-day-label').textContent=fmtDate(date);
   const dn=document.getElementById('day-notes');
   if(dn&&document.activeElement!==dn)dn.value=(S.dayNotes&&S.dayNotes[date])||'';
+  const fc=document.getElementById('f-crew');
+  if(fc&&document.activeElement!==fc)fc.value=crewFor(date);
+  fillCrewOpts();
+  fillHistoryOpts();
+  renderPendingLosses();
   const q=(document.getElementById('fly-search')?.value||'').trim().toLowerCase();
   let arr, header;
   if(q){
@@ -776,7 +869,7 @@ function buildStockReport(date){
   lines.push(fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
-  if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
+  const crew807=crewFor(date);if(crew807)lines.push("Екіпаж: "+crew807);
   lines.push('');
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
@@ -815,7 +908,7 @@ function buildReport(date){
   lines.push('Звіт '+fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
-  if(S.settings.crew)lines.push('Екіпаж: '+S.settings.crew);
+  const crew846=crewFor(date);if(crew846)lines.push("Екіпаж: "+crew846);
   lines.push('');
   arr.forEach((f,i)=>{
     lines.push((i+1)+'. '+flightText(f));
