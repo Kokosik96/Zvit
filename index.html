@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.32</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.33</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -208,6 +208,16 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <button data-d="7" class="on">7 днів</button>
     <button data-d="30">30 днів</button>
     <button data-d="0">Весь час</button>
+  </div>
+  <div class="card" style="padding:10px 12px">
+    <div class="row">
+      <div><label>Дрон</label><select id="flt-drone" onchange="renderStats()"></select></div>
+      <div><label>БК</label><select id="flt-ammo" onchange="renderStats()"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Результат</label><select id="flt-res" onchange="renderStats()"></select></div>
+    </div>
+    <div id="flt-info" class="note"></div>
   </div>
   <div class="stats" id="stats-cards"></div>
   <h2>Вильоти по днях</h2>
@@ -984,11 +994,46 @@ function renderGroups(elId,section,entries){
       </div>`).join('')}</div>`:''}`;
   }).join('');
 }
+function clearStatsFilter(){
+  ['flt-drone','flt-ammo','flt-res'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderStats();
+}
+function fillStatsFilters(pool){
+  const mk=(id,vals,label)=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;
+    el.innerHTML=`<option value="">— всі ${label} —</option>`+
+      vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(vals.includes(cur))el.value=cur;else el.value='';
+  };
+  const drones=[...new Set(pool.map(f=>f.droneName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const ammos=[...new Set(pool.map(f=>f.ammoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const ress=[...new Set(pool.map(f=>cap((f.result||'').split('(')[0].trim().toLowerCase())).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'uk'));
+  mk('flt-drone',drones,'дрони');
+  mk('flt-ammo',ammos,'БК');
+  mk('flt-res',ress,'результати');
+}
 function renderStats(){
   const now=new Date(todayISO());
   const from=statDays?new Date(now.getTime()-(statDays-1)*864e5):null;
   const inRange=f=>{if(!from)return true;const d=new Date(f.date);return d>=from&&d<=now;};
-  const arr=S.flights.filter(inRange);
+  const pool=S.flights.filter(inRange);
+  fillStatsFilters(pool);
+  const fD=document.getElementById('flt-drone')?.value||'';
+  const fA=document.getElementById('flt-ammo')?.value||'';
+  const fR=document.getElementById('flt-res')?.value||'';
+  const arr=pool.filter(f=>
+    (!fD||f.droneName===fD)&&
+    (!fA||f.ammoName===fA)&&
+    (!fR||cap((f.result||'').split('(')[0].trim().toLowerCase())===fR));
+  const info=document.getElementById('flt-info');
+  if(info){
+    const act=[fD,fA,fR].filter(Boolean);
+    info.innerHTML=act.length
+      ?`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
+      :'';
+  }
   const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
   const lost=arr.filter(f=>f.lost).length;
   const ammoTotal=arr.reduce((s,f)=>s+(f.ammoQty||0),0);
