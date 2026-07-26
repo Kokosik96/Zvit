@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.33</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.34</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -187,6 +187,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <button class="btn" onclick="addStock()">✚ Додати</button>
   </div>
   <div id="stock-list"></div>
+  <button class="btn sec" onclick="openIntake()">🔄 Приймання позиції (заїзд на зміну)</button>
+  <div id="shift-info" class="note"></div>
 </section>
 
 <!-- ЗВІТ -->
@@ -262,6 +264,18 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <button data-t="report"><span class="ic">📄</span>Звіт</button>
   <button data-t="stats"><span class="ic">📊</span>Аналітика</button>
 </nav>
+
+<dialog id="dlg-intake">
+  <h2 style="margin-top:0">Приймання позиції</h2>
+  <p class="note" style="margin-bottom:10px">Впиши фактичні залишки, які застав на позиції. Порожнє поле = 0.</p>
+  <div class="row" style="margin-bottom:8px">
+    <button class="btn sec" style="margin-top:0" onclick="intakeZeroAll()">Обнулити все</button>
+    <button class="btn sec" style="margin-top:0" onclick="intakeKeepAll()">Лишити як є</button>
+  </div>
+  <div id="intake-body" style="max-height:52vh;overflow-y:auto"></div>
+  <button class="btn" onclick="applyIntake()">✓ Прийняти позицію</button>
+  <button class="btn sec" onclick="dlgIntake.close()">Скасувати</button>
+</dialog>
 
 <dialog id="dlg-set">
   <h2 style="margin-top:0">Мої дані (для шапки звіту)</h2>
@@ -437,6 +451,58 @@ function undoImport(){
   catch(e){toast('⚠ Не вдалося відкотити');}
 }
 
+/* ===== приймання позиції ===== */
+const dlgIntake=document.getElementById('dlg-intake');
+const INTAKE_KINDS=[['ammo','БК'],['drones','Дрони'],['nbg','Не БГ'],['gear','Майно']];
+function openIntake(){renderIntakeBody();dlgIntake.showModal();}
+function renderIntakeBody(){
+  const el=document.getElementById('intake-body');
+  let html='';
+  INTAKE_KINDS.forEach(([k,label])=>{
+    const arr=(S[k]||[]).slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
+    if(!arr.length)return;
+    html+=`<h2 style="margin:12px 0 6px">${label}</h2>`;
+    arr.forEach(i=>{
+      html+=`<div class="item" style="padding:8px 10px">
+        <div class="nm" style="font-size:14px">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">SN: ${esc(i.sn)}</div>`:''}</div>
+        <input class="intake-q" data-kind="${k}" data-id="${i.id}" type="number" min="0" inputmode="numeric"
+          value="${i.qty}" style="width:76px;text-align:center;padding:8px">
+      </div>`;
+    });
+  });
+  el.innerHTML=html||'<div class="empty">Склад порожній — додай позиції звичайним способом</div>';
+}
+function intakeZeroAll(){document.querySelectorAll('.intake-q').forEach(i=>i.value=0);}
+function intakeKeepAll(){renderIntakeBody();}
+function applyIntake(){
+  const inputs=[...document.querySelectorAll('.intake-q')];
+  const changes=[];
+  inputs.forEach(inp=>{
+    const kind=inp.dataset.kind,id=inp.dataset.id;
+    const it=(S[kind]||[]).find(x=>x.id===id);if(!it)return;
+    const nv=Math.max(0,parseInt(inp.value)||0);
+    if(nv!==it.qty)changes.push({kind,it,from:it.qty,to:nv});
+  });
+  if(!changes.length){dlgIntake.close();toast('Змін немає');return;}
+  const preview=changes.slice(0,8).map(c=>`${c.it.name}: ${c.from} → ${c.to}`).join('\n');
+  const more=changes.length>8?`\n…і ще ${changes.length-8}`:'';
+  if(!confirm(`Прийняти позицію? Змін: ${changes.length}\n\n${preview}${more}`))return;
+  changes.forEach(c=>{c.it.qty=c.to;});
+  const today=todayISO();
+  logStock('приймання позиції','—',`оновлено позицій: ${changes.length}`,0,fmtDate(today));
+  if(!S.shifts)S.shifts=[];
+  S.shifts.unshift({id:uid(),date:today,changed:changes.length});
+  if(S.shifts.length>50)S.shifts.length=50;
+  save();renderStock();fillSelects();dlgIntake.close();
+  toast(`Позицію прийнято (${changes.length} змін)`);
+}
+function renderShiftInfo(){
+  const el=document.getElementById('shift-info');
+  if(!el)return;
+  const last=(S.shifts||[])[0];
+  el.textContent=last?`Останнє приймання: ${fmtDate(last.date)} (змінено позицій: ${last.changed})`:'';
+}
+
 /* ===== stock ===== */
 let stockKind='ammo';
 document.getElementById('stock-seg').addEventListener('click',e=>{
@@ -556,6 +622,7 @@ function saveStockEdit(){
   save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
 }
 function renderStock(){
+  renderShiftInfo();
   const arr=S[stockKind].slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
   const el=document.getElementById('stock-list');
   // підказка назв дронів у формі для Не БГ
