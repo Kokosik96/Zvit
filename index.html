@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.34</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.35</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -179,7 +179,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div class="row">
       <div style="flex:2"><label>Назва</label><input id="s-name" placeholder="напр. МОА композит"></div>
       <div><label>К-сть</label><input id="s-qty" type="number" value="1" min="0" inputmode="numeric"></div>
+      <div style="flex:.7"><label>Од.</label><input id="s-unit" list="unit-opts" placeholder="шт"></div>
     </div>
+    <datalist id="unit-opts">
+      <option value="шт"></option><option value="л"></option><option value="кг"></option>
+      <option value="м"></option><option value="компл"></option><option value="пар"></option>
+    </datalist>
     <div id="s-sn-wrap" style="display:none">
       <label>Серійний номер (якщо є)</label>
       <input id="s-sn" placeholder="напр. 4587-А23" style="font-family:var(--mono)">
@@ -301,6 +306,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Назва</label><input id="e-name">
   <div class="row">
     <div><label>К-сть</label><input id="e-qty" type="number" min="0" inputmode="numeric"></div>
+    <div><label>Од.</label><input id="e-unit" list="unit-opts" placeholder="шт"></div>
   </div>
   <div id="e-sn-wrap"><label>Серійний номер</label><input id="e-sn" style="font-family:var(--mono)"></div>
   <button class="btn" onclick="saveStockEdit()">Зберегти</button>
@@ -467,6 +473,7 @@ function renderIntakeBody(){
         <div class="nm" style="font-size:14px">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">SN: ${esc(i.sn)}</div>`:''}</div>
         <input class="intake-q" data-kind="${k}" data-id="${i.id}" type="number" min="0" inputmode="numeric"
           value="${i.qty}" style="width:76px;text-align:center;padding:8px">
+        ${i.unit?`<span style="font-size:12px;color:var(--muted)">${esc(i.unit)}</span>`:''}
       </div>`;
     });
   });
@@ -515,6 +522,7 @@ function addStock(){
   const n=document.getElementById('s-name').value.trim();
   const q=Math.max(0,parseInt(document.getElementById('s-qty').value)||0);
   const sn=stockKind==='gear'?document.getElementById('s-sn').value.trim():'';
+  const unit=(document.getElementById('s-unit').value.trim()||'шт').replace(/\.$/,'');
   if(!n){toast('Введи назву');return;}
   if(stockKind==='nbg'){
     const qty=q||1;
@@ -530,14 +538,17 @@ function addStock(){
     const ex=S.nbg.find(i=>i.name.toLowerCase()===n.toLowerCase());
     if(ex)ex.qty+=qty;else S.nbg.push({id:uid(),name:n,qty:qty});
   }else if(sn){
-    S[stockKind].push({id:uid(),name:n,qty:q||1,sn:sn});
+    const item={id:uid(),name:n,qty:q||1,sn:sn};
+    if(unit!=='шт')item.unit=unit;
+    S[stockKind].push(item);
     logStock('додано',stockKind,n,q||1,'SN: '+sn);
   }else{
     const ex=S[stockKind].find(i=>i.name.toLowerCase()===n.toLowerCase()&&!i.sn);
-    if(ex)ex.qty+=q;else S[stockKind].push({id:uid(),name:n,qty:q});
-    logStock('додано',stockKind,n,q||1,'');
+    if(ex){ex.qty+=q;if(unit!=='шт')ex.unit=unit;}
+    else{const item={id:uid(),name:n,qty:q};if(unit!=='шт')item.unit=unit;S[stockKind].push(item);}
+    logStock('додано',stockKind,n,q||1,unit!=='шт'?unit:'');
   }
-  document.getElementById('s-name').value='';document.getElementById('s-qty').value=1;
+  document.getElementById('s-name').value='';document.getElementById('s-qty').value=1;document.getElementById('s-unit').value='';
   if(stockKind==='gear')document.getElementById('s-sn').value='';
   save();renderStock();fillSelects();
 }
@@ -595,6 +606,7 @@ function editStock(kind,id){
   editStockRef={kind,id};
   document.getElementById('e-name').value=it.name;
   document.getElementById('e-qty').value=it.qty;
+  document.getElementById('e-unit').value=it.unit||'';
   document.getElementById('e-sn').value=it.sn||'';
   document.getElementById('e-sn-wrap').style.display=kind==='gear'?'block':'none';
   dlgStock.showModal();
@@ -611,6 +623,8 @@ function saveStockEdit(){
   it.qty=Math.max(0,parseInt(document.getElementById('e-qty').value)||0);
   if(it.qty!==oldQty)logStock('коригування',kind,n,it.qty-oldQty,'через редагування');
   if(oldName!==n)logStock('перейменовано',kind,n,0,'було: '+oldName);
+  const eu=(document.getElementById('e-unit').value.trim()||'').replace(/\.$/,'');
+  if(eu&&eu!=='шт')it.unit=eu;else delete it.unit;
   if(kind==='gear'){const sn=document.getElementById('e-sn').value.trim();if(sn)it.sn=sn;else delete it.sn;}
   // оновлюємо назву в минулих вильотах, щоб звіти лишались коректними
   if(oldName!==n){
@@ -654,7 +668,7 @@ function renderStock(){
     return `<div class="item ${isLow?'low':''}">
     <div class="nm">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">SN: ${esc(i.sn)}</div>`:''}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
-    <div class="qty ${i.qty===0?'zero':isLow?'low':''}" onclick="bulkQty('${stockKind}','${i.id}')" style="cursor:pointer;text-decoration:underline dotted var(--muted)">${i.qty}</div>
+    <div class="qty ${i.qty===0?'zero':isLow?'low':''}" onclick="bulkQty('${stockKind}','${i.id}')" style="cursor:pointer;text-decoration:underline dotted var(--muted)">${i.qty}${i.unit?`<span style="font-size:11px;color:var(--muted)"> ${esc(i.unit)}</span>`:``}</div>
     <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
     <button class="del" style="color:var(--muted)" onclick="editStock('${stockKind}','${i.id}')">✎</button>
     <button class="del" onclick="delStock('${stockKind}','${i.id}')">✕</button>
@@ -915,6 +929,7 @@ document.getElementById('r-losses').addEventListener('input',()=>{
 });
 function buildStockReport(date){
   const bySort=a=>a.slice().sort((x,y)=>y.qty-x.qty||x.name.localeCompare(y.name,'uk'));
+  const u=i=>(i.unit||'шт')+'.';
   let lines=[];
   lines.push(fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
@@ -924,18 +939,18 @@ function buildStockReport(date){
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
   const ammo=bySort(S.ammo.filter(i=>i.qty>0));
-  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
+  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
   else lines.push('•—');
   lines.push('');
   lines.push('ДРОНИ ОПТОВОЛОКНО:');
   const dr=bySort(S.drones.filter(i=>i.qty>0));
-  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
+  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
   else lines.push('•—');
   const nbg=bySort((S.nbg||[]).filter(i=>i.qty>0));
   if(nbg.length){
     lines.push('');
     lines.push('НЕ БГ:');
-    nbg.forEach(i=>lines.push(`•${i.name} - ${i.qty} шт.`));
+    nbg.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
   }
   lines.push('');
   lines.push('───');
@@ -944,8 +959,8 @@ function buildStockReport(date){
   lines.push('');
   const gr=bySort(S.gear.filter(i=>i.qty>0));
   if(gr.length)gr.forEach(i=>{
-    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} шт.`:''));
-    else lines.push(`•${i.name} - ${i.qty} шт.`);
+    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} ${u(i)}`:''));
+    else lines.push(`•${i.name} - ${i.qty} ${u(i)}`);
   });
   else lines.push('•—');
   return lines.join('\n');
