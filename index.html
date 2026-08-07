@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.35</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.36</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -968,13 +968,16 @@ function buildStockReport(date){
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
 function buildReport(date){
   const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
-  if(!arr.length)return null;
   let lines=[];
   lines.push('Звіт '+fmtDate(date));
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
   const crew846=crewFor(date);if(crew846)lines.push("Екіпаж: "+crew846);
   lines.push('');
+  if(!arr.length){
+    lines.push('Вильотів не було.');
+    return lines.join('\n');
+  }
   arr.forEach((f,i)=>{
     lines.push((i+1)+'. '+flightText(f));
     lines.push('');
