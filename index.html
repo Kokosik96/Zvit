@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.36</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.37</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1116,14 +1116,16 @@ function renderStats(){
   if(info){
     const act=[fD,fA,fR].filter(Boolean);
     info.innerHTML=act.length
-      ?`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
+      ?`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
       :'';
   }
   const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
   const lost=arr.filter(f=>f.lost).length;
   const ammoTotal=arr.reduce((s,f)=>s+(f.ammoQty||0),0);
+  const filtered=arr.length!==pool.length;
+  const shareStr=filtered&&pool.length?` · ${Math.round(arr.length/pool.length*100)}% від ${pool.length}`:'';
   document.getElementById('stats-cards').innerHTML=`
-    <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів</div></div>
+    <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів${shareStr}</div></div>
     <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})</div></div>
     <div class="stat"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
     <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>`;
@@ -1145,7 +1147,8 @@ function renderStats(){
   const resEntries=Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n).map(([r,o])=>{
     const dc={};o.det.forEach(d=>dc[d]=(dc[d]||0)+1);
     const sub=Object.entries(dc).map(([d,c])=>c>1?`${d} ×${c}`:d).join(', ');
-    return [r,{fl:o.fl,right:String(o.n),sub}];
+    const pct=arr.length?Math.round(o.n/arr.length*100):0;
+    return [r,{fl:o.fl,right:`${o.n} <span style="color:var(--muted);font-size:13px">(${pct}%)</span>`,sub}];
   });
   renderGroups('stats-res','res',resEntries);
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
@@ -1168,7 +1171,8 @@ function renderStats(){
   renderGroups('stats-topdrone','drone',
     Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl).map(([n,s])=>{
       const pct=s.fl?Math.round(s.hit/s.fl*100):0;
-      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}%)</span>`,sub:''}];
+      const shr=arr.length?Math.round(s.fl/arr.length*100):0;
+      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}% влуч · ${shr}% нальоту)</span>`,sub:''}];
     }));
 
   // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
