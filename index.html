@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.37</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.39</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -124,7 +124,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option value="живій силі противника"></option>
       <option value="техніці противника"></option>
       <option value="позиції противника"></option>
-      <option value="Розвідка"></option>
+      <option value="розвідка"></option>
     </datalist>
     <label>Район (квадрат)</label><input id="f-grid" list="grid-opts" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
     <datalist id="grid-opts"></datalist>
@@ -869,10 +869,47 @@ function fillHistoryOpts(){
   }
   const td=document.getElementById('target-opts');
   if(td){
-    const base=['живій силі противника','техніці противника','позиції противника','Розвідка'];
+    const base=['живій силі противника','техніці противника','позиції противника','розвідка'];
     const set=new Set(base);
     S.flights.forEach(f=>{if(f.target)set.add(f.target);});
     td.innerHTML=[...set].map(t=>`<option value="${esc(t)}"></option>`).join('');
+  }
+  // свої результати, використані 2+ рази → у список вибору
+  const sel=document.getElementById('f-res');
+  if(sel){
+    sel.querySelectorAll('option[data-dyn]').forEach(o=>o.remove());
+    const known=new Set([...sel.options].map(o=>o.value));
+    const cnt={};
+    S.flights.forEach(f=>{
+      const b=cap((f.result||'').split('(')[0].trim().toLowerCase());
+      if(b)cnt[b]=(cnt[b]||0)+1;
+    });
+    const other=sel.querySelector('option[value="_c"]');
+    Object.entries(cnt).filter(([b,c])=>c>=2&&!known.has(b))
+      .sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .forEach(([b])=>{
+        const o=document.createElement('option');
+        o.value=b;o.textContent=b;o.dataset.dyn='1';
+        sel.insertBefore(o,other);
+      });
+  }
+  // свої варіанти втрат, використані 2+ рази → у підказки
+  const ld=document.getElementById('loss-opts');
+  if(ld){
+    ld.querySelectorAll('option[data-dyn]').forEach(o=>o.remove());
+    const known=new Set([...ld.options].map(o=>o.value));
+    const cnt={};
+    S.flights.forEach(f=>{
+      const v=(f.loss||'').trim();
+      if(v&&!/^уточн/i.test(v))cnt[v]=(cnt[v]||0)+1;
+    });
+    Object.entries(cnt).filter(([v,c])=>c>=2&&!known.has(v))
+      .sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .forEach(([v])=>{
+        const o=document.createElement('option');
+        o.value=v;o.dataset.dyn='1';
+        ld.appendChild(o);
+      });
   }
 }
 let dayNotesTimer=null;
