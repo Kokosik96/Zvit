@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.39</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.40</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -227,8 +227,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div id="flt-info" class="note"></div>
   </div>
   <div class="stats" id="stats-cards"></div>
+  <div class="note" id="dur-note" style="margin:6px 2px 0"></div>
   <h2>Вильоти по днях</h2>
   <div class="card"><canvas id="chart" height="150"></canvas></div>
+  <h2>% влучань по тижнях</h2>
+  <div class="card"><canvas id="chart-weeks" height="150"></canvas>
+  <div class="note" id="weeks-note"></div></div>
   <h2>Розподіл по годинах доби</h2>
   <div class="card"><canvas id="chart-hours" height="150"></canvas>
   <div class="note" id="hours-note"></div></div>
@@ -250,6 +254,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div><label>До</label><input type="date" id="exp-to"></div>
     </div>
     <button class="btn" onclick="exportPeriod()">📋 Зібрати денні звіти</button>
+    <button class="btn" onclick="exportSummary()">📄 Зведення за період</button>
     <button class="btn sec" onclick="exportCSV()">⬇ Експорт CSV (таблиця)</button>
     <div id="exp-out" style="margin-top:12px"></div>
   </div>
@@ -1161,14 +1166,37 @@ function renderStats(){
   const ammoTotal=arr.reduce((s,f)=>s+(f.ammoQty||0),0);
   const filtered=arr.length!==pool.length;
   const shareStr=filtered&&pool.length?` · ${Math.round(arr.length/pool.length*100)}% від ${pool.length}`:'';
+  // тривалість польотів
+  const toMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
+  const durs=[];
+  arr.forEach(f=>{
+    const a=toMin(f.t1),b=toMin(f.t2);
+    if(a===null||b===null)return;
+    let d=b-a;if(d<0)d+=1440;
+    if(d>0&&d<=180)durs.push({d,f});
+  });
+  const totMin=durs.reduce((s,x)=>s+x.d,0);
+  const avgMin=durs.length?Math.round(totMin/durs.length):0;
+  const totStr=totMin?Math.floor(totMin/60)+' год '+String(totMin%60).padStart(2,'0')+' хв':'—';
+  const hitDurs=durs.filter(x=>/влуч|ураж/i.test(x.f.result)).map(x=>x.d);
+  const lossDurs=durs.filter(x=>/обрив|втрата керування|реб/i.test(x.f.result)).map(x=>x.d);
+  const avg=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
+  const ah=avg(hitDurs),al=avg(lossDurs);
   document.getElementById('stats-cards').innerHTML=`
     <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів${shareStr}</div></div>
     <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})</div></div>
     <div class="stat"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
-    <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>`;
+    <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>
+    <div class="stat"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ</div></div>
+    <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт</div></div>`;
+  const durNote=document.getElementById('dur-note');
+  if(durNote)durNote.textContent=(ah!==null&&al!==null)
+    ?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`
+    :'';
   // chart
   const days=statDays||Math.min(60,daysSpan(arr));
   drawChart(arr,days);
+  drawWeeksChart(arr);
   drawHoursChart(arr);
   // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив" з підписом дистанцій
   const byRes={};
@@ -1272,6 +1300,61 @@ function exportPeriod(){
     <button class="btn" onclick="copyText(document.getElementById('exp-text').value)">📋 Скопіювати все (${dates.length} дн.)</button>`;
   document.getElementById('exp-text').value=text;
 }
+function exportSummary(){
+  const from=document.getElementById('exp-from').value;
+  const to=document.getElementById('exp-to').value;
+  if(!from||!to){toast('Вкажи обидві дати');return;}
+  const lo=from<=to?from:to,hi=from<=to?to:from;
+  const arr=S.flights.filter(f=>f.date>=lo&&f.date<=hi)
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  const out=document.getElementById('exp-out');
+  let lines=[];
+  lines.push(`Зведення за ${fmtDate(lo)} – ${fmtDate(hi)}`);
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  lines.push('');
+  if(!arr.length){
+    lines.push('Вильотів не було.');
+  }else{
+    const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
+    const days=new Set(arr.map(f=>f.date)).size;
+    lines.push(`Всього вильотів: ${arr.length} (за ${days} дн.)`);
+    lines.push(`Влучань: ${hit} (${Math.round(hit/arr.length*100)}%)`);
+    lines.push('');
+    lines.push('ВИТРАТА БК:');
+    const ammoUse={};
+    arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+    const au=Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]);
+    if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
+    else lines.push('• —');
+    lines.push('');
+    lines.push('ВИТРАТИ МАЙНА:');
+    const droneUse={};
+    arr.forEach(f=>{if(f.lost)droneUse[f.droneName]=(droneUse[f.droneName]||0)+1;});
+    const du=Object.entries(droneUse).sort((a,b)=>b[1]-a[1]);
+    if(du.length)du.forEach(([n,q])=>lines.push(`• ${n} - ${q} шт.`));
+    else lines.push('• —');
+    lines.push('');
+    lines.push('ВТРАТИ ВОРОГА:');
+    const losses=[];
+    const seenDates=new Set();
+    arr.forEach(f=>{
+      const v=(f.loss||'').trim();
+      if(v&&!/^уточн/i.test(v))losses.push(`• ${fmtDate(f.date)}: ${v}`);
+      seenDates.add(f.date);
+    });
+    seenDates.forEach(d=>{
+      const m=(S.losses&&S.losses[d]||'').trim();
+      if(m&&!/^уточн/i.test(m))losses.push(`• ${fmtDate(d)}: ${m}`);
+    });
+    if(losses.length)losses.sort().forEach(l=>lines.push(l));
+    else lines.push('Уточнюються');
+  }
+  const text=lines.join('\n');
+  out.innerHTML=`<textarea class="report" style="width:100%;min-height:160px" id="exp-text"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('exp-text').value)">📋 Скопіювати зведення</button>`;
+  document.getElementById('exp-text').value=text;
+}
 function toggleStockLog(){
   const el=document.getElementById('stock-log');
   if(el.style.display==='none'){el.style.display='block';renderStockLog();}
@@ -1304,6 +1387,47 @@ function toggleTheme(){
   document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'🌙 Темна тема':'☀ Світла тема';
 }
 
+function drawWeeksChart(arr){
+  const cv=document.getElementById('chart-weeks');
+  if(!cv)return;
+  const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+  const note=document.getElementById('weeks-note');
+  // групуємо по тижнях (понеділок — початок)
+  const wk={};
+  arr.forEach(f=>{
+    const d=new Date(f.date);
+    const day=(d.getDay()+6)%7; // пн=0
+    const mon=new Date(d.getTime()-day*864e5);
+    const key=mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
+    if(!wk[key])wk[key]={n:0,hit:0};
+    wk[key].n++;
+    if(/влуч|ураж/i.test(f.result))wk[key].hit++;
+  });
+  const keys=Object.keys(wk).sort();
+  if(keys.length<2){
+    if(note)note.textContent='Замало даних — динаміка зʼявиться, коли буде 2+ тижні вильотів.';
+    return;
+  }
+  if(note)note.textContent='Стовпець — % влучань за тиждень (від понеділка), число знизу — вильотів.';
+  const pad=8*devicePixelRatio,topPad=16*devicePixelRatio;
+  const bw=(W-pad*2)/keys.length;
+  ctx.font=(9.5*devicePixelRatio)+'px monospace';ctx.textAlign='center';
+  keys.forEach((k,i)=>{
+    const o=wk[k];
+    const pct=o.n?Math.round(o.hit/o.n*100):0;
+    const h=(H-42*devicePixelRatio-topPad)*(pct/100);
+    const x=pad+i*bw;
+    ctx.fillStyle=pct>=60?'#7fbf7a':pct>=35?'#b6c46a':'#d96b5a';
+    ctx.fillRect(x+bw*.18,H-32*devicePixelRatio-h,bw*.64,Math.max(h,2*devicePixelRatio));
+    ctx.fillStyle='#d9dfe6';
+    ctx.fillText(pct+'%',x+bw/2,H-36*devicePixelRatio-h);
+    ctx.fillStyle='#8b94a0';
+    const[y,m,d]=k.split('-');
+    ctx.fillText(d+'.'+m,x+bw/2,H-18*devicePixelRatio);
+    ctx.fillText(o.n,x+bw/2,H-6*devicePixelRatio);
+  });
+}
 function drawHoursChart(arr){
   const cv=document.getElementById('chart-hours');
   if(!cv)return;
