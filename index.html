@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.40</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.41</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -696,7 +696,7 @@ document.getElementById('f-date').addEventListener('change',renderFlights);
 
 function flightText(f){
   const pos=f.position?`(позиція FPV “${f.position}”), `:'';
-  const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:'';
+  const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:' ( без БК )';
   const tgt=f.target?(/^розвідк/i.test(f.target)?`${f.target} `:`по ${f.target} `):'';
   return `${f.t1} - ${f.t2} ${pos}удар дроном-камікадзе на оптоволокні ${f.droneName}${ammo}, ${tgt}в районі ${f.grid}\n`+
     `Результат: ${f.result}\n`+
