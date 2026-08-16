@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.45</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.46</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -791,7 +791,7 @@ function saveFlight(){
 
   if(editId){ // повертаємо старі списання
     const old=S.flights.find(x=>x.id===editId);
-    if(old){restoreStock(old);}
+    if(old){restoreStock(old,"перерахунок при редагуванні");}
   }
   // списання
   if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);logStock('списано (виліт)','drones',drone.name,-1,date);}
@@ -813,9 +813,11 @@ function saveFlight(){
   }
   save();clearForm();renderFlights();fillSelects();
 }
-function restoreStock(f){
-  if(f.lost){const d=S.drones.find(i=>i.id===f.droneId);if(d)d.qty++;}
-  if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);if(a)a.qty+=f.ammoQty;}
+function restoreStock(f,why){
+  if(f.lost){const d=S.drones.find(i=>i.id===f.droneId);
+    if(d){d.qty++;logStock('повернуто на склад','drones',d.name,1,why||'видалення вильоту');}}
+  if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);
+    if(a){a.qty+=f.ammoQty;logStock('повернуто на склад','ammo',a.name,f.ammoQty,why||'видалення вильоту');}}
 }
 function clearForm(){
   ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist'].forEach(i=>document.getElementById(i).value='');
