@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.41</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.42</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -262,7 +262,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h2>Історія руху складу</h2>
   <div class="card">
     <button class="btn sec" style="margin-top:0" onclick="toggleStockLog()">Показати / сховати лог</button>
-    <div id="stock-log" style="display:none;margin-top:10px"></div>
+    <div id="stock-log-wrap" style="display:none;margin-top:10px">
+      <label>Фільтр за днем (порожньо = всі)</label>
+      <input type="date" id="log-date" onchange="renderStockLog()" style="margin-bottom:8px">
+      <button class="btn sec" style="margin-top:0;margin-bottom:8px" onclick="document.getElementById('log-date').value='';renderStockLog()">Показати всі дні</button>
+      <div id="stock-log"></div>
+    </div>
   </div>
 </section>
 
@@ -1356,14 +1361,20 @@ function exportSummary(){
   document.getElementById('exp-text').value=text;
 }
 function toggleStockLog(){
-  const el=document.getElementById('stock-log');
+  const el=document.getElementById('stock-log-wrap');
   if(el.style.display==='none'){el.style.display='block';renderStockLog();}
   else el.style.display='none';
 }
 function renderStockLog(){
   const el=document.getElementById('stock-log');
-  const log=S.stockLog||[];
-  if(!log.length){el.innerHTML='<div class="empty">Лог порожній</div>';return;}
+  const fd=document.getElementById('log-date')?.value||'';
+  let log=S.stockLog||[];
+  if(fd){
+    const[y,m,d]=fd.split('-').map(Number);
+    const from=new Date(y,m-1,d).getTime(), to=from+864e5;
+    log=log.filter(e=>e.ts>=from&&e.ts<to);
+  }
+  if(!log.length){el.innerHTML='<div class="empty">'+(fd?'За '+fmtDate(fd)+' рухів не було':'Лог порожній')+'</div>';return;}
   const kindName={ammo:'БК',drones:'Дрон',gear:'Майно'};
   el.innerHTML=log.slice(0,100).map(e=>{
     const dt=new Date(e.ts);
