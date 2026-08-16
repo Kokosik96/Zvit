@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.43</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.44</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -108,8 +108,18 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <datalist id="crew-opts"></datalist>
     <div class="row">
-      <div><label>Час зльоту</label><input id="f-t1" placeholder="12:14" inputmode="decimal"></div>
-      <div><label>Час посадки</label><input id="f-t2" placeholder="12:24" inputmode="decimal"></div>
+      <div><label>Час зльоту</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-t1" placeholder="12:14" inputmode="decimal" style="flex:1;min-width:0">
+          <button type="button" class="pm" style="width:52px;font-size:13px" onclick="stampTime('f-t1')">⏱ зліт</button>
+        </div>
+      </div>
+      <div><label>Час посадки</label>
+        <div style="display:flex;gap:6px">
+          <input id="f-t2" placeholder="12:24" inputmode="decimal" style="flex:1;min-width:0">
+          <button type="button" class="pm" style="width:52px;font-size:13px" onclick="stampTime('f-t2')">⏱ сів</button>
+        </div>
+      </div>
     </div>
     <div class="row">
       <div style="flex:2"><label>Дрон (зі складу)</label><select id="f-drone"></select></div>
@@ -708,6 +718,12 @@ document.getElementById('f-res').addEventListener('change',e=>{
 });
 document.getElementById('f-date').addEventListener('change',renderFlights);
 
+function stampTime(id){
+  const d=new Date();
+  const t=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  document.getElementById(id).value=t;
+  toast((id==='f-t1'?'Зліт: ':'Посадка: ')+t);
+}
 function onTypeChange(){
   const t=document.getElementById('f-type').value;
   // бомбер повертається — за замовчуванням не списуємо
