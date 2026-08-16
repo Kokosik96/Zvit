@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.44</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.45</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -108,19 +108,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <datalist id="crew-opts"></datalist>
     <div class="row">
-      <div><label>Час зльоту</label>
-        <div style="display:flex;gap:6px">
-          <input id="f-t1" placeholder="12:14" inputmode="decimal" style="flex:1;min-width:0">
-          <button type="button" class="pm" style="width:52px;font-size:13px" onclick="stampTime('f-t1')">⏱ зліт</button>
-        </div>
-      </div>
-      <div><label>Час посадки</label>
-        <div style="display:flex;gap:6px">
-          <input id="f-t2" placeholder="12:24" inputmode="decimal" style="flex:1;min-width:0">
-          <button type="button" class="pm" style="width:52px;font-size:13px" onclick="stampTime('f-t2')">⏱ сів</button>
-        </div>
-      </div>
+      <div><label>Час зльоту</label><input id="f-t1" placeholder="12:14" inputmode="decimal" oninput="updateFlyBtn()"></div>
+      <div><label>Час посадки</label><input id="f-t2" placeholder="12:24" inputmode="decimal" oninput="updateFlyBtn()"></div>
     </div>
+    <button type="button" class="btn" id="fly-btn" style="margin-top:10px;padding:16px;font-size:17px" onclick="flyStamp()">⏱ Початок польоту</button>
     <div class="row">
       <div style="flex:2"><label>Дрон (зі складу)</label><select id="f-drone"></select></div>
       <div><label>Дрон списати?</label><select id="f-lost"><option value="1">Так (−1)</option><option value="0">Ні</option></select></div>
@@ -718,11 +709,30 @@ document.getElementById('f-res').addEventListener('change',e=>{
 });
 document.getElementById('f-date').addEventListener('change',renderFlights);
 
-function stampTime(id){
+function nowHM(){
   const d=new Date();
-  const t=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
-  document.getElementById(id).value=t;
-  toast((id==='f-t1'?'Зліт: ':'Посадка: ')+t);
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function flyStamp(){
+  const t1=document.getElementById('f-t1'),t2=document.getElementById('f-t2');
+  if(!t1.value.trim()){
+    t1.value=nowHM();toast('Зліт: '+t1.value);
+  }else if(!t2.value.trim()){
+    t2.value=nowHM();toast('Посадка: '+t2.value);
+  }else{
+    if(!confirm('Обидва часи вже заповнені. Почати новий відлік? (зліт = зараз, посадка очиститься)'))return;
+    t1.value=nowHM();t2.value='';toast('Новий відлік. Зліт: '+t1.value);
+  }
+  updateFlyBtn();
+}
+function updateFlyBtn(){
+  const b=document.getElementById('fly-btn');
+  if(!b)return;
+  const t1=document.getElementById('f-t1').value.trim();
+  const t2=document.getElementById('f-t2').value.trim();
+  if(!t1)b.textContent='⏱ Початок польоту';
+  else if(!t2)b.textContent='⏱ Кінець польоту';
+  else b.textContent='⏱ Новий відлік';
 }
 function onTypeChange(){
   const t=document.getElementById('f-type').value;
@@ -812,6 +822,7 @@ function clearForm(){
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
+  updateFlyBtn();
 }
 function editFlight(id){
   const f=S.flights.find(x=>x.id===id);if(!f)return;
@@ -840,6 +851,7 @@ function editFlight(id){
     document.getElementById('f-res-c').style.display='none';}
   else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=base;c.style.display='block';rd.value=dist;}
   document.getElementById('f-cancel').style.display='block';
+  updateFlyBtn();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function cancelEdit(){editId=null;clearForm();document.getElementById('f-cancel').style.display='none';}
@@ -884,6 +896,7 @@ function dupFlight(id){
     document.getElementById('f-res-c').style.display='none';}
   else{dsel.value='_c';const c=document.getElementById('f-res-c');c.value=dbase;c.style.display='block';}
   drd.value='';
+  updateFlyBtn();
   window.scrollTo({top:0,behavior:'smooth'});
   toast('Дані підставлено — впиши час і збережи');
 }
