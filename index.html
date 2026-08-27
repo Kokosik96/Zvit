@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.49</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.50</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -219,8 +219,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 
 <!-- ЗВІТ -->
 <section id="tab-report" class="tab">
-  <div class="seg" id="r-seg">
-    <button class="on" data-m="flights">Вильоти за день</button>
+  <div class="seg" id="r-seg" style="flex-wrap:wrap">
+    <button class="on" data-m="flights">Загальний</button>
+    <button data-m="before">До 18:00</button>
+    <button data-m="after">Після 18:00</button>
     <button data-m="stock">Наявність</button>
   </div>
   <div class="card" id="r-card">
@@ -320,6 +322,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
   <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
   <label>Скільки копій тримати в папці</label><input id="set-keep" type="number" min="1" max="10" value="3" inputmode="numeric">
+  <label>Година розділу звітів (до/після)</label><input id="set-cut" type="number" min="0" max="23" value="18" inputmode="numeric">
   <button class="btn sec" id="theme-btn" onclick="toggleTheme()">☀ Світла тема</button>
   <button class="btn" onclick="saveSettings()">Зберегти</button>
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
@@ -422,6 +425,7 @@ function openSettings(){
   document.getElementById('set-crew').value=S.settings.crew||'';
   document.getElementById('set-low').value=S.settings.lowThreshold??2;
   document.getElementById('set-keep').value=S.settings.keepBackups??3;
+  document.getElementById('set-cut').value=S.settings.cutHour??18;
   const fi=document.getElementById('folder-info');
   if(S.settings.fileBackup==='folder')fi.textContent='✓ Автобекап у папку: раз на день'+(S.lastFileBackup?' (останній: '+fmtDate(S.lastFileBackup)+')':'');
   else if(S.settings.fileBackup==='dialog')fi.textContent='Автобекап через діалог збереження, раз на день';
@@ -434,6 +438,11 @@ function saveSettings(){
   S.settings.crew=document.getElementById('set-crew').value.trim();
   S.settings.lowThreshold=Math.max(0,parseInt(document.getElementById('set-low').value)||0);
   S.settings.keepBackups=Math.min(10,Math.max(1,parseInt(document.getElementById('set-keep').value)||3));
+  S.settings.cutHour=Math.min(23,Math.max(0,parseInt(document.getElementById('set-cut').value)??18));
+  const rs=document.getElementById('r-seg');
+  if(rs){const cs=String(S.settings.cutHour).padStart(2,'0')+':00';
+    rs.querySelector('[data-m="before"]').textContent='До '+cs;
+    rs.querySelector('[data-m="after"]').textContent='Після '+cs;}
   save();dlgSet.close();toast('Збережено');
   if(S.settings.fileBackup==='folder')cleanOldBackups(S.settings.keepBackups);
 }
@@ -1049,15 +1058,17 @@ document.getElementById('r-losses').addEventListener('input',()=>{
   const ta=document.getElementById('r-text');
   if(ta){const t=buildReport(date);if(t){ta.value=t;ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';}}
 });
-function buildStockReport(date){
+function buildStockReport(date,noHeader){
   const bySort=a=>a.slice().sort((x,y)=>y.qty-x.qty||x.name.localeCompare(y.name,'uk'));
   const u=i=>(i.unit||'шт')+'.';
   let lines=[];
-  lines.push(fmtDate(date));
-  if(S.settings.unit)lines.push(S.settings.unit);
-  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
-  const crew807=crewFor(date);if(crew807)lines.push("Екіпаж: "+crew807);
-  lines.push('');
+  if(!noHeader){
+    lines.push(fmtDate(date));
+    if(S.settings.unit)lines.push(S.settings.unit);
+    if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+    const crew807=crewFor(date);if(crew807)lines.push("Екіпаж: "+crew807);
+    lines.push('');
+  }
   lines.push('НАЯВНІСТЬ БК:');
   lines.push('');
   const ammo=bySort(S.ammo.filter(i=>i.qty>0));
@@ -1088,10 +1099,17 @@ function buildStockReport(date){
   return lines.join('\n');
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
-function buildReport(date){
-  const arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+const cutHour=()=>S.settings.cutHour??18;
+const flMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
+function buildReport(date,part){
+  const cut=cutHour()*60;
+  let arr=S.flights.filter(f=>f.date===date);
+  if(part==='before')arr=arr.filter(f=>{const m=flMin(f.t1);return m===null||m<cut;});
+  else if(part==='after')arr=arr.filter(f=>{const m=flMin(f.t1);return m!==null&&m>=cut;});
+  arr=arr.sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  const cutStr=String(cutHour()).padStart(2,'0')+':00';
   let lines=[];
-  lines.push('Звіт '+fmtDate(date));
+  lines.push('Звіт '+fmtDate(date)+(part==='before'?` (до ${cutStr})`:part==='after'?` (після ${cutStr})`:''));
   if(S.settings.unit)lines.push(S.settings.unit);
   if(S.settings.position)lines.push('Позиція: '+S.settings.position);
   const crew846=crewFor(date);if(crew846)lines.push("Екіпаж: "+crew846);
@@ -1139,14 +1157,18 @@ let rMode='flights';
 document.getElementById('r-seg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;rMode=b.dataset.m;
   document.querySelectorAll('#r-seg button').forEach(x=>x.classList.toggle('on',x===b));
-  document.getElementById('r-loss-wrap').style.display=rMode==='flights'?'block':'none';
+  document.getElementById('r-loss-wrap').style.display=(rMode==='stock')?'none':'block';
   renderReport();
 });
 function renderReport(){
   const date=document.getElementById('r-date').value||todayISO();
   document.getElementById('r-date').value=date;
   document.getElementById('r-losses').value=(S.losses&&S.losses[date])||'';
-  const t=rMode==='stock'?buildStockReport(date):buildReport(date);
+  let t;
+  if(rMode==='stock')t=buildStockReport(date);
+  else if(rMode==='before'||rMode==='after')
+    t=buildReport(date,rMode)+'\n\n───\n\n'+buildStockReport(date,true);
+  else t=buildReport(date);
   const el=document.getElementById('r-out');
   if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
   el.innerHTML=`<textarea class="report" id="r-text" style="width:100%;min-height:120px"></textarea>
@@ -1154,6 +1176,8 @@ function renderReport(){
     <button class="btn sec" onclick="shareReport()">↗ Поділитися (месенджер)</button>
     <p class="note">${rMode==='stock'
       ?'Наявність береться з поточних залишків складу. Текст можна правити перед відправкою.'
+      :(rMode==='before'||rMode==='after')
+      ?'Вильоти за пів дня + поточна наявність в одному тексті. Текст можна правити перед відправкою.'
       :'Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».'}</p>`;
   const ta=document.getElementById('r-text');
   ta.value=t;
@@ -1660,6 +1684,10 @@ document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'�
 (function(){const t=todayISO();const d=new Date(t);d.setDate(d.getDate()-6);
   const wk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
   document.getElementById('exp-from').value=wk;document.getElementById('exp-to').value=t;})();
+(function(){const rs=document.getElementById('r-seg');
+  if(rs&&S.settings.cutHour!==undefined){const cs=String(S.settings.cutHour).padStart(2,'0')+':00';
+    rs.querySelector('[data-m="before"]').textContent='До '+cs;
+    rs.querySelector('[data-m="after"]').textContent='Після '+cs;}})();
 renderAll();
 if(S.settings.fileBackup==='folder'){bkLoadHandle().then(h=>{if(h){backupDirHandle=h;writeFileBackup(false);}});}
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
