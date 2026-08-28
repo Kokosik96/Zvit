@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.53</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.54</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -309,7 +309,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <div class="row">
       <div><label>Категорія</label>
-        <select id="d-kind">
+        <select id="d-kind" onchange="onDelivKindChange()">
           <option value="ammo">БК</option>
           <option value="drones">Дрони</option>
           <option value="gear">Майно</option>
@@ -545,10 +545,25 @@ const KIND_LABEL={ammo:'БК',drones:'Дрони',gear:'Майно',nbg:'Не Б
 function fillDelivNames(){
   const dl=document.getElementById('deliv-names');
   if(!dl)return;
+  const kind=document.getElementById('d-kind')?.value||'ammo';
   const set=new Set();
-  ['ammo','drones','gear','nbg'].forEach(k=>(S[k]||[]).forEach(i=>set.add(i.name)));
-  (S.deliveries||[]).forEach(d=>set.add(d.name));
-  dl.innerHTML=[...set].map(n=>`<option value="${esc(n)}"></option>`).join('');
+  if(kind==='other'){
+    (S.deliveries||[]).filter(d=>d.kind==='other').forEach(d=>set.add(d.name));
+  }else{
+    (S[kind]||[]).forEach(i=>set.add(i.name));
+    // для "Не БГ" підказуємо ще й назви наявних дронів
+    if(kind==='nbg')(S.drones||[]).forEach(i=>set.add(i.name));
+    (S.deliveries||[]).filter(d=>d.kind===kind).forEach(d=>set.add(d.name));
+  }
+  dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b,'uk')).map(n=>`<option value="${esc(n)}"></option>`).join('');
+}
+function onDelivKindChange(){
+  fillDelivNames();
+  const inp=document.getElementById('d-name');
+  inp.value='';
+  const k=document.getElementById('d-kind').value;
+  inp.placeholder={ammo:'напр. МОА композит 61',drones:'напр. Інквізитор 10/15 км день',
+    gear:'напр. Патч-корд',nbg:'назва дрона',other:'напр. бензин'}[k]||'назва';
 }
 function addDeliv(){
   const date=document.getElementById('d-date').value||todayISO();
