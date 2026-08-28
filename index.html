@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.50</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.51</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1166,8 +1166,7 @@ function renderReport(){
   document.getElementById('r-losses').value=(S.losses&&S.losses[date])||'';
   let t;
   if(rMode==='stock')t=buildStockReport(date);
-  else if(rMode==='before'||rMode==='after')
-    t=buildReport(date,rMode)+'\n\n───\n\n'+buildStockReport(date,true);
+  else if(rMode==='before'||rMode==='after')t=buildReport(date,rMode);
   else t=buildReport(date);
   const el=document.getElementById('r-out');
   if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
@@ -1177,7 +1176,7 @@ function renderReport(){
     <p class="note">${rMode==='stock'
       ?'Наявність береться з поточних залишків складу. Текст можна правити перед відправкою.'
       :(rMode==='before'||rMode==='after')
-      ?'Вильоти за пів дня + поточна наявність в одному тексті. Текст можна правити перед відправкою.'
+      ?'Тільки вильоти за цей проміжок. Наявність — окремим звітом.'
       :'Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».'}</p>`;
   const ta=document.getElementById('r-text');
   ta.value=t;
