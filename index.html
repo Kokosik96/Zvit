@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.55</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.56</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1340,6 +1340,7 @@ function renderReport(){
   el.innerHTML=`<textarea class="report" id="r-text" style="width:100%;min-height:120px"></textarea>
     <button class="btn" onclick="copyText(document.getElementById('r-text').value)">📋 Скопіювати звіт</button>
     <button class="btn sec" onclick="shareReport()">↗ Поділитися (месенджер)</button>
+    <button class="btn sec" onclick="saveReportFile()">⬇ Зберегти як файл</button>
     <p class="note">${rMode==='stock'
       ?'Наявність береться з поточних залишків складу. Текст можна правити перед відправкою.'
       :(rMode==='before'||rMode==='after')
@@ -1350,8 +1351,22 @@ function renderReport(){
   const fit=()=>{ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';};
   ta.addEventListener('input',fit);fit();
 }
+function saveReportFile(){
+  const t=document.getElementById('r-text').value;
+  const date=document.getElementById('r-date').value||todayISO();
+  const blob=new Blob(['\uFEFF'+t],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='zvit-'+date+'.txt';a.click();
+  toast('Файл збережено');
+}
 function shareReport(){
   const t=document.getElementById('r-text').value;
+  // месенджери обрізають довгий текст при передачі через «Поділитися»
+  if(t.length>800){
+    if(confirm(`Звіт довгий (${t.length} симв.).\n\nМесенджери часто обрізають такі тексти при «Поділитися».\n\nСкопіювати в буфер і вставити вручну? (надійно)`)){
+      copyText(t);return;
+    }
+  }
   if(navigator.share)navigator.share({text:t}).catch(()=>{});
   else copyText(t);
 }
