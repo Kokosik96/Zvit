@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.56</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.59</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -577,25 +577,30 @@ function addDeliv(){
   const note=document.getElementById('d-note').value.trim();
   if(!name){toast('Введи назву');return;}
   if(!qty){toast('Вкажи кількість');return;}
+  let appliedQty=0;
   if(apply){
     const list=S[kind]||(S[kind]=[]);
-    let it=list.find(i=>i.name.toLowerCase()===name.toLowerCase()&&!i.sn);
     if(dir==='in'){
-      if(it)it.qty+=qty;
+      let it=list.find(i=>i.name.toLowerCase()===name.toLowerCase()&&!i.sn);
+      if(it){it.qty+=qty;}
       else{const o={id:uid(),name,qty};if(unit!=='шт')o.unit=unit;list.push(o);}
+      appliedQty=qty;
       logStock('доставка (приїхало)',kind,name,qty,note);
     }else{
+      // шукаємо будь-яку позицію з такою назвою (з серійником теж)
+      let it=list.find(i=>i.name.toLowerCase()===name.toLowerCase()&&!i.sn)
+           ||list.find(i=>i.name.toLowerCase()===name.toLowerCase());
       if(!it){toast('«'+name+'» немає на складі — записано без списання');}
       else{
         const take=Math.min(it.qty,qty);
-        it.qty-=take;
+        it.qty-=take;appliedQty=take;
         logStock('доставка (виїхало)',kind,name,-take,note);
         if(take<qty)toast(`На складі було ${take} — списано ${take}`);
       }
     }
   }
   if(!S.deliveries)S.deliveries=[];
-  S.deliveries.unshift({id:uid(),date,dir,kind,name,qty,unit,note,applied:apply});
+  S.deliveries.unshift({id:uid(),date,dir,kind,name,qty,unit,note,applied:apply,appliedQty});
   if(S.deliveries.length>500)S.deliveries.length=500;
   document.getElementById('d-name').value='';
   document.getElementById('d-qty').value=1;
@@ -606,14 +611,16 @@ function addDeliv(){
 }
 function delDeliv(id){
   const d=(S.deliveries||[]).find(x=>x.id===id);if(!d)return;
-  const back=d.applied?'\n\nСклад буде повернуто до попереднього стану.':'';
+  const aq=d.appliedQty!==undefined?d.appliedQty:0;
+  const back=aq?`\n\nСклад буде повернуто до попереднього стану (${aq} ${d.unit||'шт'}).`:'';
   if(!confirm(`Видалити запис «${d.name} — ${d.qty} ${d.unit||'шт'}»?${back}`))return;
-  if(d.applied&&d.kind!=='other'){
+  if(aq&&d.kind!=='other'){
     const list=S[d.kind]||[];
-    const it=list.find(i=>i.name.toLowerCase()===d.name.toLowerCase()&&!i.sn);
+    const it=list.find(i=>i.name.toLowerCase()===d.name.toLowerCase()&&!i.sn)
+           ||list.find(i=>i.name.toLowerCase()===d.name.toLowerCase());
     if(it){
-      if(d.dir==='in'){it.qty=Math.max(0,it.qty-d.qty);logStock('відкат доставки',d.kind,d.name,-d.qty,'видалення запису');}
-      else{it.qty+=d.qty;logStock('відкат доставки',d.kind,d.name,d.qty,'видалення запису');}
+      if(d.dir==='in'){it.qty=Math.max(0,it.qty-aq);logStock('відкат доставки',d.kind,d.name,-aq,'видалення запису');}
+      else{it.qty+=aq;logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');}
     }
   }
   S.deliveries=S.deliveries.filter(x=>x.id!==id);
