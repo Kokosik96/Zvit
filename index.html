@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.59</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.61</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -181,6 +181,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <button class="btn sec" id="f-cancel" style="display:none" onclick="cancelEdit()">Скасувати редагування</button>
   </div>
 
+  <div id="day-summary" class="note" style="margin:14px 2px 0"></div>
   <h2>Вильоти за <span id="fly-day-label"></span></h2>
   <input id="fly-search" placeholder="🔍 пошук: дрон, ціль, квадрат, результат…" oninput="renderFlights()" style="margin-bottom:10px">
   <div id="fly-list"></div>
@@ -371,10 +372,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
   <label style="margin-top:14px">Відновити з копії</label>
   <input type="file" id="imp-file" accept=".json" onchange="importData(this)">
+  <button class="btn sec" onclick="forceUpdate()">🔄 Перевірити оновлення</button>
   <button class="btn sec" onclick="restoreSnapshot()">⏱ Відновити з автозбереження</button>
   <button class="btn sec" onclick="undoImport()">↩ Відкотити останнє відновлення</button>
   <button class="btn sec" id="folder-btn" onclick="pickBackupFolder()">📁 Папка для автобекапу</button>
   <div id="folder-info" class="note"></div>
+  <div id="storage-info" class="note" style="margin-top:8px"></div>
   <button class="btn sec" onclick="dlgSet.close()">Закрити</button>
 </dialog>
 
@@ -400,22 +403,50 @@ function load(){
   try{const s=localStorage.getItem(KEY); if(s) return JSON.parse(s);}catch(e){}
   return mem||{settings:{unit:'',position:''},ammo:[],drones:[],gear:[],flights:[]};
 }
+function storageInfo(){
+  let total=0;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      total+=((localStorage.getItem(k)||'').length+k.length)*2; // UTF-16
+    }
+  }catch(e){}
+  return{bytes:total,kb:Math.round(total/1024),pct:Math.round(total/(5*1024*1024)*100)};
+}
+let storageWarned=false;
 function save(){
   mem=S;
   try{
     const json=JSON.stringify(S);
     localStorage.setItem(KEY,json);
-    // внутрішній автобекап: щодня один знімок, тримаємо 5 останніх
+    // знімок раз на день, тримаємо 3 останні (не 5 — економія місця)
     const today=todayISO();
     let snaps={};
     try{snaps=JSON.parse(localStorage.getItem(KEY+'-snaps')||'{}');}catch(e){}
     if(!snaps[today]){
       snaps[today]=json;
       const days=Object.keys(snaps).sort();
-      while(days.length>5){delete snaps[days.shift()];}
-      try{localStorage.setItem(KEY+'-snaps',JSON.stringify(snaps));}catch(e){}
+      while(days.length>3){delete snaps[days.shift()];}
+      try{localStorage.setItem(KEY+'-snaps',JSON.stringify(snaps));}
+      catch(e){
+        // місця нема — лишаємо тільки найсвіжіший знімок
+        try{localStorage.setItem(KEY+'-snaps',JSON.stringify({[today]:json}));}catch(e2){
+          try{localStorage.removeItem(KEY+'-snaps');}catch(e3){}
+        }
+      }
     }
-  }catch(e){toast('⚠ Дані лише в памʼяті (браузер блокує збереження)');}
+    // попередження при заповненні
+    const info=storageInfo();
+    if(info.pct>=80&&!storageWarned){
+      storageWarned=true;
+      setTimeout(()=>toast(`⚠ Памʼять заповнена на ${info.pct}% — зроби бекап (⚙)`),800);
+    }
+  }catch(e){
+    // основне сховище переповнене — звільняємо знімки і пробуємо ще раз
+    try{localStorage.removeItem(KEY+'-snaps');localStorage.removeItem(KEY+'-prev');}catch(e2){}
+    try{localStorage.setItem(KEY,JSON.stringify(S));toast('⚠ Памʼять майже повна — старі автозбереження очищено');}
+    catch(e3){toast('⚠ Дані лише в памʼяті! Терміново зроби бекап у файл (⚙)');}
+  }
 }
 let S=load();
 if(!S.nbg)S.nbg=[];
@@ -434,6 +465,8 @@ document.addEventListener('visibilitychange',()=>{
 // міграція: час 12.14 → 12:14 у старих записах
 if(S.flights)S.flights.forEach(f=>{if(f.t1)f.t1=f.t1.replace(/[.,]/g,':');if(f.t2)f.t2=f.t2.replace(/[.,]/g,':');});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+// нормалізація назви для порівняння: прибирає подвійні пробіли і регістр
+const nkey=s=>String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
 function logStock(action,kind,name,delta,note){
   if(!S.stockLog)S.stockLog=[];
   S.stockLog.unshift({id:uid(),ts:Date.now(),action,kind,name,delta:delta||0,note:note||''});
@@ -470,6 +503,11 @@ function openSettings(){
   document.getElementById('set-low').value=S.settings.lowThreshold??2;
   document.getElementById('set-keep').value=S.settings.keepBackups??3;
   document.getElementById('set-cut').value=S.settings.cutHour??18;
+  const si=document.getElementById('storage-info');
+  if(si){const inf=storageInfo();
+    const fl=(S.flights||[]).length;
+    si.innerHTML=`Памʼять: ${inf.kb} КБ (${inf.pct}% ліміту) · вильотів: ${fl}`+
+      (inf.pct>=70?' <b style="color:var(--amber)">— час робити бекапи регулярно</b>':'');}
   const fi=document.getElementById('folder-info');
   if(S.settings.fileBackup==='folder')fi.textContent='✓ Автобекап у папку: раз на день'+(S.lastFileBackup?' (останній: '+fmtDate(S.lastFileBackup)+')':'');
   else if(S.settings.fileBackup==='dialog')fi.textContent='Автобекап через діалог збереження, раз на день';
@@ -514,6 +552,27 @@ function importData(inp){
     inp.value='';
   };
   r.readAsText(f);
+}
+async function forceUpdate(){
+  toast('Перевіряю оновлення…');
+  try{
+    // 1) скидаємо кеш застосунку
+    if(window.caches){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+    // 2) оновлюємо service worker
+    if(navigator.serviceWorker){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.update().catch(()=>{})));
+    }
+    // 3) тягнемо свіжу сторінку в обхід кешу
+    await fetch('index.html?ts='+Date.now(),{cache:'reload'}).catch(()=>{});
+    toast('Перезапускаю…');
+    setTimeout(()=>location.reload(true),600);
+  }catch(e){
+    toast('Не вдалося — перевір інтернет');
+  }
 }
 function restoreSnapshot(){
   let snaps={};
@@ -571,7 +630,7 @@ function addDeliv(){
   const dir=document.getElementById('d-dir').value;
   const kind=document.getElementById('d-kind').value;
   const apply=document.getElementById('d-apply').value==='1'&&kind!=='other';
-  const name=document.getElementById('d-name').value.trim();
+  const name=document.getElementById('d-name').value.trim().replace(/\s+/g,' ');
   const qty=Math.max(0,parseInt(document.getElementById('d-qty').value)||0);
   const unit=(document.getElementById('d-unit').value.trim()||'шт').replace(/\.$/,'');
   const note=document.getElementById('d-note').value.trim();
@@ -581,15 +640,15 @@ function addDeliv(){
   if(apply){
     const list=S[kind]||(S[kind]=[]);
     if(dir==='in'){
-      let it=list.find(i=>i.name.toLowerCase()===name.toLowerCase()&&!i.sn);
+      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn);
       if(it){it.qty+=qty;}
       else{const o={id:uid(),name,qty};if(unit!=='шт')o.unit=unit;list.push(o);}
       appliedQty=qty;
       logStock('доставка (приїхало)',kind,name,qty,note);
     }else{
       // шукаємо будь-яку позицію з такою назвою (з серійником теж)
-      let it=list.find(i=>i.name.toLowerCase()===name.toLowerCase()&&!i.sn)
-           ||list.find(i=>i.name.toLowerCase()===name.toLowerCase());
+      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn)
+           ||list.find(i=>nkey(i.name)===nkey(name));
       if(!it){toast('«'+name+'» немає на складі — записано без списання');}
       else{
         const take=Math.min(it.qty,qty);
@@ -616,8 +675,8 @@ function delDeliv(id){
   if(!confirm(`Видалити запис «${d.name} — ${d.qty} ${d.unit||'шт'}»?${back}`))return;
   if(aq&&d.kind!=='other'){
     const list=S[d.kind]||[];
-    const it=list.find(i=>i.name.toLowerCase()===d.name.toLowerCase()&&!i.sn)
-           ||list.find(i=>i.name.toLowerCase()===d.name.toLowerCase());
+    const it=list.find(i=>nkey(i.name)===nkey(d.name)&&!i.sn)
+           ||list.find(i=>nkey(i.name)===nkey(d.name));
     if(it){
       if(d.dir==='in'){it.qty=Math.max(0,it.qty-aq);logStock('відкат доставки',d.kind,d.name,-aq,'видалення запису');}
       else{it.qty+=aq;logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');}
@@ -706,6 +765,8 @@ function applyIntake(){
   changes.forEach(c=>{c.it.qty=c.to;});
   const today=todayISO();
   logStock('приймання позиції','—',`оновлено позицій: ${changes.length}`,0,fmtDate(today));
+  // деталі кожної зміни — щоб при звірці було видно, що саме змінилось
+  changes.forEach(c=>logStock('  ↳ приймання',c.kind,c.it.name,c.to-c.from,`було ${c.from} → стало ${c.to}`));
   if(!S.shifts)S.shifts=[];
   S.shifts.unshift({id:uid(),date:today,changed:changes.length});
   if(S.shifts.length>50)S.shifts.length=50;
@@ -728,14 +789,14 @@ document.getElementById('stock-seg').addEventListener('click',e=>{
   renderStock();
 });
 function addStock(){
-  const n=document.getElementById('s-name').value.trim();
+  const n=document.getElementById('s-name').value.trim().replace(/\s+/g,' ');
   const q=Math.max(0,parseInt(document.getElementById('s-qty').value)||0);
   const sn=stockKind==='gear'?document.getElementById('s-sn').value.trim():'';
   const unit=(document.getElementById('s-unit').value.trim()||'шт').replace(/\.$/,'');
   if(!n){toast('Введи назву');return;}
   if(stockKind==='nbg'){
     const qty=q||1;
-    const drone=S.drones.find(i=>i.name.toLowerCase()===n.toLowerCase());
+    const drone=S.drones.find(i=>nkey(i.name)===nkey(n));
     if(drone){
       const take=Math.min(drone.qty,qty);
       drone.qty-=take;
@@ -744,7 +805,7 @@ function addStock(){
     }else{
       logStock('додано в не БГ','drones',n,0,'не знайдено серед наявних');
     }
-    const ex=S.nbg.find(i=>i.name.toLowerCase()===n.toLowerCase());
+    const ex=S.nbg.find(i=>nkey(i.name)===nkey(n));
     if(ex)ex.qty+=qty;else S.nbg.push({id:uid(),name:n,qty:qty});
   }else if(sn){
     const item={id:uid(),name:n,qty:q||1,sn:sn};
@@ -752,7 +813,7 @@ function addStock(){
     S[stockKind].push(item);
     logStock('додано',stockKind,n,q||1,'SN: '+sn);
   }else{
-    const ex=S[stockKind].find(i=>i.name.toLowerCase()===n.toLowerCase()&&!i.sn);
+    const ex=S[stockKind].find(i=>nkey(i.name)===nkey(n)&&!i.sn);
     if(ex){ex.qty+=q;if(unit!=='шт')ex.unit=unit;}
     else{const item={id:uid(),name:n,qty:q};if(unit!=='шт')item.unit=unit;S[stockKind].push(item);}
     logStock('додано',stockKind,n,q||1,unit!=='шт'?unit:'');
@@ -776,7 +837,7 @@ function nbgToTech(id){
 function nbgReturn(id){
   const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
   it.qty--;
-  const drone=S.drones.find(i=>i.name.toLowerCase()===it.name.toLowerCase());
+  const drone=S.drones.find(i=>nkey(i.name)===nkey(it.name));
   if(drone)drone.qty++;else S.drones.push({id:uid(),name:it.name,qty:1});
   logStock('повернуто в стрій','drones',it.name,1,'з не БГ');
   if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
@@ -828,7 +889,7 @@ function saveStockEdit(){
   if(!editStockRef)return;
   const{kind,id}=editStockRef;
   const it=S[kind].find(i=>i.id===id);if(!it)return;
-  const n=document.getElementById('e-name').value.trim();
+  const n=document.getElementById('e-name').value.trim().replace(/\s+/g,' ');
   if(!n){toast('Назва не може бути порожньою');return;}
   const oldName=it.name;
   const oldQty=it.qty;
@@ -868,9 +929,11 @@ function renderStock(){
   if(stockKind==='nbg'){
     el.innerHTML=arr.map(i=>`<div class="item" style="border-color:var(--red)">
       <div class="nm">${esc(i.name)}</div>
-      <div class="qty" style="color:var(--red)">${i.qty}</div>
-      <button class="del" style="color:var(--green);width:auto;padding:0 10px" onclick="nbgReturn('${i.id}')">↩ у стрій</button>
-      <button class="del" style="color:var(--amber);width:auto;padding:0 10px" onclick="nbgToTech('${i.id}')">🔧 технічка</button>
+      <div class="qty" style="color:var(--red);cursor:pointer;text-decoration:underline dotted var(--muted)" onclick="bulkQty('nbg','${i.id}')">${i.qty}</div>
+      <button class="del" style="color:var(--green);width:auto;padding:0 8px;font-size:13px" onclick="nbgReturn('${i.id}')">↩ стрій</button>
+      <button class="del" style="color:var(--amber);width:auto;padding:0 8px;font-size:13px" onclick="nbgToTech('${i.id}')">🔧</button>
+      <button class="del" style="color:var(--muted)" onclick="editStock('nbg','${i.id}')">✎</button>
+      <button class="del" onclick="delStock('nbg','${i.id}')">✕</button>
     </div>`).join('');
     return;
   }
@@ -987,6 +1050,16 @@ function saveFlight(){
   }
   if(grid&&!looksLikeMgrs(grid)){
     if(!confirm(`Квадрат «${grid}» виглядає незвично для MGRS (зразок: 37U CR 50156 68752).\nЗберегти як є?`))return;
+  }
+  // перевірка дати — щоб випадковий рік/місяць не сховав виліт зі звітів
+  {
+    const t=todayISO();
+    const diff=Math.round((new Date(date)-new Date(t))/864e5);
+    if(diff>1){
+      if(!confirm(`Дата вильоту ${fmtDate(date)} — у майбутньому (сьогодні ${fmtDate(t)}).\nЗберегти?`))return;
+    }else if(diff<-30){
+      if(!confirm(`Дата вильоту ${fmtDate(date)} — понад місяць тому.\nЗберегти?`))return;
+    }
   }
 
   if(editId){ // повертаємо старі списання
@@ -1206,6 +1279,17 @@ function renderFlights(){
     document.getElementById('fly-day-label').textContent=`пошук: ${arr.length}`;
   }else{
     arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  }
+  // короткий підсумок дня
+  const ds=document.getElementById('day-summary');
+  if(ds){
+    const day=S.flights.filter(f=>f.date===date);
+    if(day.length){
+      const h=day.filter(f=>/влуч|ураж/i.test(f.result)).length;
+      const bk=day.reduce((s,f)=>s+(f.ammoQty||0),0);
+      const ld=day.filter(f=>f.lost).length;
+      ds.innerHTML=`<b style="color:var(--accent)">${fmtDate(date)}:</b> вильотів ${day.length} · влучань ${h} · БК ${bk} · дронів списано ${ld}`;
+    }else ds.innerHTML='';
   }
   const el=document.getElementById('fly-list');
   if(!arr.length){el.innerHTML='<div class="empty">'+(q?'Нічого не знайдено':'Вильотів за цю дату немає')+'</div>';return;}
