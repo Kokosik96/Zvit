@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.62</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.63</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1073,9 +1073,11 @@ function saveFlight(){
     const old=S.flights.find(x=>x.id===editId);
     if(old){restoreStock(old,"перерахунок при редагуванні");}
   }
-  // списання
-  if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);logStock('списано (виліт)','drones',drone.name,-1,date);}
-  if(ammo&&aq>0){ammo.qty=Math.max(0,ammo.qty-aq);logStock('списано (виліт)','ammo',ammo.name,-aq,date);}
+  // списання — одним записом у лог на весь виліт
+  const wr=[];
+  if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);wr.push(`${drone.name} −1`);}
+  if(ammo&&aq>0){ammo.qty=Math.max(0,ammo.qty-aq);wr.push(`${ammo.name} −${aq}`);}
+  if(wr.length)logStock('списано (виліт)','flight',wr.join(' · '),0,`${fmtDate(date)} ${t1}–${t2}`);
 
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
     droneId,droneName:drone.name,lost,ftype:ftypeVal,noRet,
@@ -1094,10 +1096,12 @@ function saveFlight(){
   save();clearForm();renderFlights();fillSelects();
 }
 function restoreStock(f,why){
+  const rb=[];
   if(f.lost){const d=S.drones.find(i=>i.id===f.droneId);
-    if(d){d.qty++;logStock('повернуто на склад','drones',d.name,1,why||'видалення вильоту');}}
+    if(d){d.qty++;rb.push(`${d.name} +1`);}}
   if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);
-    if(a){a.qty+=f.ammoQty;logStock('повернуто на склад','ammo',a.name,f.ammoQty,why||'видалення вильоту');}}
+    if(a){a.qty+=f.ammoQty;rb.push(`${a.name} +${f.ammoQty}`);}}
+  if(rb.length)logStock('повернуто на склад','flight',rb.join(' · '),0,why||'видалення вильоту');
 }
 function clearForm(){
   ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist','f-noret'].forEach(i=>document.getElementById(i).value='');
@@ -1784,12 +1788,12 @@ function renderStockLog(){
     log=log.filter(e=>e.ts>=from&&e.ts<to);
   }
   if(!log.length){el.innerHTML='<div class="empty">'+(fd?'За '+fmtDate(fd)+' рухів не було':'Лог порожній')+'</div>';return;}
-  const kindName={ammo:'БК',drones:'Дрон',gear:'Майно'};
+  const kindName={ammo:'БК',drones:'Дрон',gear:'Майно',nbg:'Не БГ',flight:'Виліт'};
   el.innerHTML=log.slice(0,100).map(e=>{
     const dt=new Date(e.ts);
     const ds=String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+' '+
       String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
-    const sign=e.delta>0?'+'+e.delta:e.delta;
+    const sign=e.delta>0?'+'+e.delta:e.delta<0?String(e.delta):'';
     const col=e.delta>0?'var(--green)':e.delta<0?'var(--red)':'var(--muted)';
     return `<div class="item"><div class="nm" style="font-size:14px">
       <span style="color:var(--muted);font-family:var(--mono);font-size:12px">${ds}</span> · ${esc(e.action)}<br>
