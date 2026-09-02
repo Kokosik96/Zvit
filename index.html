@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.61</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.62</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -236,11 +236,18 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 
 <!-- СТАТИСТИКА -->
 <section id="tab-stats" class="tab">
-  <div class="seg" id="stats-seg">
+  <div class="seg" id="stats-seg" style="flex-wrap:wrap">
     <button data-d="1">Сьогодні</button>
     <button data-d="7" class="on">7 днів</button>
     <button data-d="30">30 днів</button>
     <button data-d="0">Весь час</button>
+    <button data-d="custom">Період</button>
+  </div>
+  <div class="card" id="stats-range" style="display:none;padding:10px 12px">
+    <div class="row">
+      <div><label>Від</label><input type="date" id="st-from" onchange="renderStats()"></div>
+      <div><label>До</label><input type="date" id="st-to" onchange="renderStats()"></div>
+    </div>
   </div>
   <div class="card" style="padding:10px 12px">
     <div class="row">
@@ -1465,8 +1472,20 @@ function shareReport(){
 /* ===== stats ===== */
 let statDays=7;
 document.getElementById('stats-seg').addEventListener('click',e=>{
-  const b=e.target.closest('button');if(!b)return;statDays=+b.dataset.d;
+  const b=e.target.closest('button');if(!b)return;
+  statDays=b.dataset.d==='custom'?'custom':+b.dataset.d;
   document.querySelectorAll('#stats-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  const rng=document.getElementById('stats-range');
+  if(statDays==='custom'){
+    rng.style.display='block';
+    // за замовчуванням — останні 14 днів
+    const f=document.getElementById('st-from'),t=document.getElementById('st-to');
+    if(!f.value||!t.value){
+      const today=todayISO();const d=new Date(today);d.setDate(d.getDate()-13);
+      f.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      t.value=today;
+    }
+  }else rng.style.display='none';
   renderStats();
 });
 let openGroups={res:null,drone:null,ammo:null};
@@ -1518,10 +1537,20 @@ function fillStatsFilters(pool){
   mk('flt-res',ress,'результати');
 }
 function renderStats(){
-  const now=new Date(todayISO());
-  const from=statDays?new Date(now.getTime()-(statDays-1)*864e5):null;
-  const inRange=f=>{if(!from)return true;const d=new Date(f.date);return d>=from&&d<=now;};
-  const pool=S.flights.filter(inRange);
+  let pool, periodLabel='';
+  if(statDays==='custom'){
+    const fv=document.getElementById('st-from')?.value||'';
+    const tv=document.getElementById('st-to')?.value||'';
+    const lo=fv&&tv?(fv<=tv?fv:tv):fv||tv;
+    const hi=fv&&tv?(fv<=tv?tv:fv):fv||tv;
+    if(!lo||!hi){pool=S.flights.slice();}
+    else{pool=S.flights.filter(f=>f.date>=lo&&f.date<=hi);periodLabel=`${fmtDate(lo)} – ${fmtDate(hi)}`;}
+  }else{
+    const now=new Date(todayISO());
+    const from=statDays?new Date(now.getTime()-(statDays-1)*864e5):null;
+    const inRange=f=>{if(!from)return true;const d=new Date(f.date);return d>=from&&d<=now;};
+    pool=S.flights.filter(inRange);
+  }
   fillStatsFilters(pool);
   const fD=document.getElementById('flt-drone')?.value||'';
   const fA=document.getElementById('flt-ammo')?.value||'';
@@ -1533,9 +1562,10 @@ function renderStats(){
   const info=document.getElementById('flt-info');
   if(info){
     const act=[fD,fA,fR].filter(Boolean);
+    const perStr=periodLabel?`Період: ${periodLabel} — ${pool.length} вильотів`:'';
     info.innerHTML=act.length
-      ?`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
-      :'';
+      ?(periodLabel?perStr+'<br>':'')+`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
+      :perStr;
   }
   const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
   const lost=arr.filter(f=>f.lost).length;
@@ -1570,8 +1600,16 @@ function renderStats(){
     ?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`
     :'';
   // chart
-  const days=statDays||Math.min(60,daysSpan(arr));
-  drawChart(arr,days);
+  let days;
+  if(statDays==='custom'){
+    const fv=document.getElementById('st-from')?.value||'';
+    const tv=document.getElementById('st-to')?.value||'';
+    if(fv&&tv){
+      const lo=fv<=tv?fv:tv,hi=fv<=tv?tv:fv;
+      days=Math.min(90,Math.max(1,Math.round((new Date(hi)-new Date(lo))/864e5)+1));
+    }else days=Math.min(60,daysSpan(arr));
+  }else days=statDays||Math.min(60,daysSpan(arr));
+  drawChart(arr,days,statDays==='custom'?(document.getElementById('st-to')?.value||todayISO()):todayISO());
   drawWeeksChart(arr);
   drawHoursChart(arr);
   // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив" з підписом дистанцій
@@ -1635,11 +1673,11 @@ function daysSpan(arr){
   const min=arr.reduce((m,f)=>f.date<m?f.date:m,arr[0].date);
   return Math.max(7,Math.round((new Date(todayISO())-new Date(min))/864e5)+1);
 }
-function drawChart(arr,days){
+function drawChart(arr,days,endISO){
   const cv=document.getElementById('chart');
   const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
   const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
-  const now=new Date(todayISO());
+  const now=new Date(endISO||todayISO());
   const counts=[],labels=[];
   for(let i=days-1;i>=0;i--){
     const d=new Date(now.getTime()-i*864e5);
