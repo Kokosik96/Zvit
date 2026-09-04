@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.64</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.65</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -272,6 +272,9 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <h2>Розподіл по годинах доби</h2>
   <div class="card"><canvas id="chart-hours" height="150"></canvas>
   <div class="note" id="hours-note"></div></div>
+  <h2>Втрати противника</h2>
+  <div class="stats" id="loss-cards"></div>
+  <div id="stats-losses" style="margin-top:10px"></div>
   <h2>Результати</h2>
   <div id="stats-res"></div>
   <h2>Наліт по дронах (вильотів / влучань)</h2>
@@ -1400,6 +1403,16 @@ function buildStockReport(date,noHeader){
   return lines.join('\n');
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+// розбір запису втрат: "2х300, знищено укриття" → {200:0,300:2,other:['знищено укриття']}
+function parseLoss(s){
+  const out={200:0,300:0,other:[]};
+  String(s||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean).forEach(p=>{
+    const m=p.match(/^(\d+)?\s*[xх*\-–]?\s*(200|300)\s*$/i);
+    if(m){out[m[2]]+=m[1]?parseInt(m[1]):1;return;}
+    out.other.push(p);
+  });
+  return out;
+}
 const cutHour=()=>S.settings.cutHour??18;
 const flMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
 function buildReport(date,part){
@@ -1525,8 +1538,8 @@ document.getElementById('stats-seg').addEventListener('click',e=>{
   }else rng.style.display='none';
   renderStats();
 });
-let openGroups={res:null,drone:null,ammo:null};
-let groupKeys={res:[],drone:[],ammo:[]};
+let openGroups={res:null,drone:null,ammo:null,loss:null};
+let groupKeys={res:[],drone:[],ammo:[],loss:[]};
 function toggleGroup(section,idx){
   const k=groupKeys[section][idx];
   if(k===undefined)return;
@@ -1667,6 +1680,41 @@ function renderStats(){
     return [r,{fl:o.fl,right:`${o.n} <span style="color:var(--muted);font-size:13px">(${pct}%)</span>`,sub}];
   });
   renderGroups('stats-res','res',resEntries);
+
+  // === Втрати противника ===
+  let l200=0,l300=0,withLoss=0;
+  const byLoss={};
+  arr.forEach(f=>{
+    const raw=(f.loss||'').trim();
+    if(!raw||/^уточн/i.test(raw))return;
+    withLoss++;
+    const p=parseLoss(raw);
+    l200+=p[200];l300+=p[300];
+    // кожна складова окремим рядком
+    const parts=[];
+    if(p[200])parts.push(`${p[200]}х200`);
+    if(p[300])parts.push(`${p[300]}х300`);
+    p.other.forEach(o=>parts.push(cap(o.toLowerCase())));
+    parts.forEach(k=>{
+      const key=/^\d+х(200|300)$/.test(k)?('Жива сила '+k.replace(/^\d+/,'')):k;
+      if(!byLoss[key])byLoss[key]={n:0,fl:[],qty:0};
+      byLoss[key].n++;
+      const mq=k.match(/^(\d+)х/);
+      byLoss[key].qty+=mq?parseInt(mq[1]):1;
+      if(!byLoss[key].fl.includes(f))byLoss[key].fl.push(f);
+    });
+  });
+  const lc=document.getElementById('loss-cards');
+  if(lc)lc.innerHTML=`
+    <div class="stat"><div class="v">${l200}</div><div class="l">200 (безповоротні)</div></div>
+    <div class="stat"><div class="v">${l300}</div><div class="l">300 (санітарні)</div></div>
+    <div class="stat"><div class="v">${withLoss}</div><div class="l">вильотів з втратами${arr.length?' · '+Math.round(withLoss/arr.length*100)+'%':''}</div></div>
+    <div class="stat"><div class="v">${l200+l300}</div><div class="l">разом особового складу</div></div>`;
+  renderGroups('stats-losses','loss',
+    Object.entries(byLoss).sort((a,b)=>b[1].qty-a[1].qty).map(([k,o])=>{
+      const isPer=/^Жива сила/.test(k);
+      return [k,{fl:o.fl,right:isPer?`${o.qty} <span style="color:var(--muted);font-size:13px">ос.</span>`:String(o.qty),sub:''}];
+    }));
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
   document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
     Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
