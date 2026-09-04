@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.63</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.64</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -157,7 +157,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option value="2х300"></option>
       <option value="знищено бліндаж"></option>
       <option value="знищено позицію"></option>
+      <option value="знищено укриття"></option>
     </datalist>
+    <button class="btn sec" style="margin-top:8px" onclick="addLoss()">✚ Додати ще втрату</button>
+    <div id="loss-chips" style="margin-top:8px"></div>
     <label>Результат</label>
     <select id="f-res">
       <option>Влучання в ціль</option>
@@ -1027,6 +1030,28 @@ const normTime=s=>{
   return s;
 };
 const looksLikeMgrs=g=>/^\d{1,2}\s?[A-Za-z]\s?[A-Za-z]{2}\s?\d{4,5}\s?\d{4,5}$/.test(g.trim());
+let pendingLosses=[];
+function addLoss(){
+  const v=document.getElementById('f-loss').value.trim();
+  if(!v){toast('Впиши втрату');return;}
+  if(/^уточн/i.test(v)){toast('«Уточнюються» додавати не треба');return;}
+  if(pendingLosses.some(x=>x.toLowerCase()===v.toLowerCase())){toast('Уже додано');return;}
+  pendingLosses.push(v);
+  document.getElementById('f-loss').value='';
+  renderLossChips();
+  toast('Додано: '+v);
+}
+function delLoss(i){pendingLosses.splice(i,1);renderLossChips();}
+function renderLossChips(){
+  const el=document.getElementById('loss-chips');
+  if(!el)return;
+  if(!pendingLosses.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="note" style="margin:0 0 4px">Втрати противника:</div>'+
+    pendingLosses.map((v,i)=>`<div class="item" style="padding:7px 10px;margin-bottom:5px">
+      <div class="nm" style="font-size:14px">${i+1}. ${esc(v)}</div>
+      <button class="del" onclick="delLoss(${i})">✕</button>
+    </div>`).join('');
+}
 function saveFlight(){
   const date=document.getElementById('f-date').value||todayISO();
   const t1=normTime(document.getElementById('f-t1').value.trim());
@@ -1040,7 +1065,10 @@ function saveFlight(){
   const aq=Math.max(0,parseInt(document.getElementById('f-aqty').value)||0);
   const target=document.getElementById('f-target').value.trim();
   const grid=document.getElementById('f-grid').value.trim();
-  const loss=document.getElementById('f-loss').value.trim();
+  const lossCur=document.getElementById('f-loss').value.trim();
+  let lossList=pendingLosses.slice();
+  if(lossCur&&!/^уточн/i.test(lossCur)&&!lossList.some(x=>x.toLowerCase()===lossCur.toLowerCase()))lossList.push(lossCur);
+  const loss=lossList.join(', ');
   let res=document.getElementById('f-res').value;
   if(res==='_c')res=document.getElementById('f-res-c').value.trim()||'—';
   const rdist=document.getElementById('f-res-dist').value.trim();
@@ -1082,7 +1110,7 @@ function saveFlight(){
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
     droneId,droneName:drone.name,lost,ftype:ftypeVal,noRet,
     ammoId:ammo?ammo.id:'',ammoName:ammo?ammo.name:'',ammoQty:ammo?aq:0,
-    target,grid,result:res,loss};
+    target,grid,result:res,loss,losses:lossList};
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
     document.getElementById('f-cancel').style.display='none';toast('Виліт оновлено');}
   else{
@@ -1108,6 +1136,7 @@ function clearForm(){
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
+  pendingLosses=[];renderLossChips();
   updateFlyBtn();
 }
 function editFlight(id){
@@ -1126,7 +1155,10 @@ function editFlight(id){
   document.getElementById('f-aqty').value=f.ammoQty||0;
   document.getElementById('f-target').value=f.target;
   document.getElementById('f-grid').value=f.grid;
-  document.getElementById('f-loss').value=f.loss||'';
+  {const ll=(f.losses&&f.losses.length)?f.losses.slice():((f.loss||'').trim()&&!/^уточн/i.test(f.loss)?[f.loss.trim()]:[]);
+   const lastL=ll.pop()||'';
+   pendingLosses=ll;renderLossChips();
+   document.getElementById('f-loss').value=lastL;}
   const sel=document.getElementById('f-res');
   const rd=document.getElementById('f-res-dist');
   const raw=f.result||'';
@@ -1178,7 +1210,8 @@ function dupFlight(id){
   document.getElementById('f-aqty').value=f.ammoQty||0;
   document.getElementById('f-target').value=f.target||'';
   document.getElementById('f-grid').value=f.grid||'';
-  document.getElementById('f-loss').value=f.loss||'';
+  document.getElementById('f-loss').value='';
+  pendingLosses=[];renderLossChips();
   const dsel=document.getElementById('f-res'),drd=document.getElementById('f-res-dist');
   const draw=f.result||'';const dm=draw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
   const dbase=dm?dm[1].trim():draw.trim();
