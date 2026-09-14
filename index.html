@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.65</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.66</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -259,6 +259,9 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <div class="row">
       <div><label>Результат</label><select id="flt-res" onchange="renderStats()"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Втрати противника</label><select id="flt-loss" onchange="renderStats()"></select></div>
     </div>
     <div id="flt-info" class="note"></div>
   </div>
@@ -1413,6 +1416,16 @@ function parseLoss(s){
   });
   return out;
 }
+// ключі втрат вильоту: ['Жива сила х300','Знищено укриття']
+function lossKeys(f){
+  const raw=(f.loss||'').trim();
+  if(!raw||/^уточн/i.test(raw))return[];
+  const p=parseLoss(raw);const out=[];
+  if(p[200])out.push('Жива сила х200');
+  if(p[300])out.push('Жива сила х300');
+  p.other.forEach(o=>out.push(cap(o.toLowerCase())));
+  return [...new Set(out)];
+}
 const cutHour=()=>S.settings.cutHour??18;
 const flMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
 function buildReport(date,part){
@@ -1567,7 +1580,7 @@ function renderGroups(elId,section,entries){
   }).join('');
 }
 function clearStatsFilter(){
-  ['flt-drone','flt-ammo','flt-res'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['flt-drone','flt-ammo','flt-res','flt-loss'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderStats();
 }
 function fillStatsFilters(pool){
@@ -1585,6 +1598,8 @@ function fillStatsFilters(pool){
   mk('flt-drone',drones,'дрони');
   mk('flt-ammo',ammos,'БК');
   mk('flt-res',ress,'результати');
+  const losses=[...new Set(pool.flatMap(f=>lossKeys(f)))].sort((a,b)=>a.localeCompare(b,'uk'));
+  mk('flt-loss',losses,'втрати');
 }
 function renderStats(){
   let pool, periodLabel='';
@@ -1605,13 +1620,15 @@ function renderStats(){
   const fD=document.getElementById('flt-drone')?.value||'';
   const fA=document.getElementById('flt-ammo')?.value||'';
   const fR=document.getElementById('flt-res')?.value||'';
+  const fL=document.getElementById('flt-loss')?.value||'';
   const arr=pool.filter(f=>
     (!fD||f.droneName===fD)&&
     (!fA||f.ammoName===fA)&&
-    (!fR||cap((f.result||'').split('(')[0].trim().toLowerCase())===fR));
+    (!fR||cap((f.result||'').split('(')[0].trim().toLowerCase())===fR)&&
+    (!fL||lossKeys(f).includes(fL)));
   const info=document.getElementById('flt-info');
   if(info){
-    const act=[fD,fA,fR].filter(Boolean);
+    const act=[fD,fA,fR,fL].filter(Boolean);
     const perStr=periodLabel?`Період: ${periodLabel} — ${pool.length} вильотів`:'';
     info.innerHTML=act.length
       ?(periodLabel?perStr+'<br>':'')+`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
@@ -1713,7 +1730,12 @@ function renderStats(){
   renderGroups('stats-losses','loss',
     Object.entries(byLoss).sort((a,b)=>b[1].qty-a[1].qty).map(([k,o])=>{
       const isPer=/^Жива сила/.test(k);
-      return [k,{fl:o.fl,right:isPer?`${o.qty} <span style="color:var(--muted);font-size:13px">ос.</span>`:String(o.qty),sub:''}];
+      const nf=o.fl.length;
+      const pct=arr.length?Math.round(nf/arr.length*100):0;
+      const right=isPer
+        ?`${o.qty} <span style="color:var(--muted);font-size:13px">ос.</span>`
+        :String(o.qty);
+      return [k,{fl:o.fl,right,sub:`у ${nf} ${nf===1?'вильоті':'вильотах'} — ${pct}% від усіх`}];
     }));
   const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
   document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
