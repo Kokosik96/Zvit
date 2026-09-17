@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.67</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.68</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -149,6 +149,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <option value="техніці противника"></option>
       <option value="позиції противника"></option>
       <option value="розвідка"></option>
+      <option value="засідка"></option>
+      <option value="чергування"></option>
+      <option value="спостереження"></option>
+      <option value="супровід"></option>
     </datalist>
     <label>Район (квадрат)</label><input id="f-grid" list="grid-opts" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
     <datalist id="grid-opts"></datalist>
@@ -1017,6 +1021,12 @@ function onTypeChange(){
   w.style.display=t==='bomber'?'block':'none';
   if(t!=='bomber')document.getElementById('f-noret').value='';
 }
+// цілі, що пишуться без "по" (називний відмінок)
+const STANDALONE_TARGETS=['розвідк','засідк','чергуванн','спостереженн','супров','патрулюванн','ретрансл'];
+function standaloneTarget(t){
+  const s=String(t||'').trim().toLowerCase();
+  return STANDALONE_TARGETS.some(w=>s.startsWith(w));
+}
 function strikePhrase(f){
   const t=f.ftype||'fiber';
   const tags=[];
@@ -1030,7 +1040,7 @@ function strikePhrase(f){
 function flightText(f){
   const pos=f.position?`(позиція FPV “${f.position}”), `:'';
   const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:' ( без БК )';
-  const tgt=f.target?(/^розвідк/i.test(f.target)?`${f.target} `:`по ${f.target} `):'';
+  const tgt=f.target?(standaloneTarget(f.target)?`${f.target} `:`по ${f.target} `):'';
   return `${f.t1} - ${f.t2} ${pos}${strikePhrase(f)}${ammo}, ${tgt}в районі ${f.grid}\n`+
     `Результат: ${f.result}\n`+
     `Втрати противника: ${f.loss||'уточнюються'}`;
@@ -1267,7 +1277,7 @@ function fillHistoryOpts(){
   }
   const td=document.getElementById('target-opts');
   if(td){
-    const base=['живій силі противника','техніці противника','позиції противника','розвідка'];
+    const base=['живій силі противника','техніці противника','позиції противника','розвідка','засідка','чергування','спостереження','супровід'];
     const set=new Set(base);
     S.flights.forEach(f=>{if(f.target)set.add(f.target);});
     td.innerHTML=[...set].map(t=>`<option value="${esc(t)}"></option>`).join('');
