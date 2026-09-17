@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.68</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.69</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1659,16 +1659,20 @@ function renderStats(){
   const shareStr=filtered&&pool.length?` · ${Math.round(arr.length/pool.length*100)}% від ${pool.length}`:'';
   // тривалість польотів
   const toMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
-  const durs=[];
+  const durs=[],zdurs=[];
   arr.forEach(f=>{
     const a=toMin(f.t1),b=toMin(f.t2);
     if(a===null||b===null)return;
     let d=b-a;if(d<0)d+=1440;
-    if(d>0&&d<=180)durs.push({d,f});
+    if(d<=0)return;
+    if(f.zhdun){zdurs.push({d,f});return;}   // ждуни рахуємо окремо
+    if(d<=180)durs.push({d,f});
   });
+  const hm=m=>Math.floor(m/60)+' год '+String(m%60).padStart(2,'0')+' хв';
   const totMin=durs.reduce((s,x)=>s+x.d,0);
   const avgMin=durs.length?Math.round(totMin/durs.length):0;
-  const totStr=totMin?Math.floor(totMin/60)+' год '+String(totMin%60).padStart(2,'0')+' хв':'—';
+  const totStr=totMin?hm(totMin):'—';
+  const zTot=zdurs.reduce((s,x)=>s+x.d,0);
   const hitDurs=durs.filter(x=>/влуч|ураж/i.test(x.f.result)).map(x=>x.d);
   const lossDurs=durs.filter(x=>/обрив|втрата керування|реб/i.test(x.f.result)).map(x=>x.d);
   const avg=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
@@ -1678,12 +1682,17 @@ function renderStats(){
     <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})</div></div>
     <div class="stat"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
     <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>
-    <div class="stat"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ</div></div>
-    <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт</div></div>`;
+    <div class="stat"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ${zdurs.length?' (без ждунів)':''}</div></div>
+    <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт${zdurs.length?' (без ждунів)':''}</div></div>`+
+    (zdurs.length?`
+    <div class="stat"><div class="v">${zdurs.length}</div><div class="l">вильотів ждуном</div></div>
+    <div class="stat"><div class="v" style="font-size:20px">${hm(zTot)}</div><div class="l">час ждуном на позиції</div></div>`:'');
   const durNote=document.getElementById('dur-note');
-  if(durNote)durNote.textContent=(ah!==null&&al!==null)
-    ?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`
-    :'';
+  if(durNote){
+    const p1=(ah!==null&&al!==null)?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`:'';
+    const p2=zdurs.length?`Ждуни (${zdurs.length}) не входять у наліт — час очікування рахується окремо.`:'';
+    durNote.innerHTML=[p1,p2].filter(Boolean).join('<br>');
+  }
   // chart
   let days;
   if(statDays==='custom'){
