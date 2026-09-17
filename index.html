@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.66</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.67</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -113,12 +113,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <button type="button" class="btn" id="fly-btn" style="margin-top:10px;padding:16px;font-size:17px" onclick="flyStamp()">⏱ Початок польоту</button>
     <div class="row">
-      <div><label>Тип вильоту</label>
+      <div style="flex:2"><label>Тип вильоту</label>
         <select id="f-type" onchange="onTypeChange()">
           <option value="fiber">Камікадзе (оптоволокно)</option>
           <option value="radio">Камікадзе (радіо)</option>
           <option value="bomber">Бомбер</option>
         </select>
+      </div>
+      <div><label>Ждун?</label>
+        <select id="f-zhdun"><option value="0">Ні</option><option value="1">Так</option></select>
       </div>
     </div>
     <div id="f-noret-wrap" style="display:none">
@@ -1016,7 +1019,10 @@ function onTypeChange(){
 }
 function strikePhrase(f){
   const t=f.ftype||'fiber';
-  const nr=f.noRet?` (${f.noRet})`:'';
+  const tags=[];
+  if(f.zhdun)tags.push('ждун');
+  if(f.noRet)tags.push(f.noRet);
+  const nr=tags.length?` (${tags.join(', ')})`:'';
   if(t==='bomber')return `скид з бомбера ${f.droneName}${nr}`;
   if(t==='radio')return `удар дроном-камікадзе ${f.droneName}${nr}`;
   return `удар дроном-камікадзе на оптоволокні ${f.droneName}${nr}`;
@@ -1114,7 +1120,7 @@ function saveFlight(){
   if(wr.length)logStock('списано (виліт)','flight',wr.join(' · '),0,`${fmtDate(date)} ${t1}–${t2}`);
 
   const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
-    droneId,droneName:drone.name,lost,ftype:ftypeVal,noRet,
+    droneId,droneName:drone.name,lost,ftype:ftypeVal,noRet,zhdun:document.getElementById('f-zhdun').value==='1',
     ammoId:ammo?ammo.id:'',ammoName:ammo?ammo.name:'',ammoQty:ammo?aq:0,
     target,grid,result:res,loss,losses:lossList};
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
@@ -1154,6 +1160,7 @@ function editFlight(id){
   fillSelects();
   document.getElementById('f-drone').value=f.droneId;
   document.getElementById('f-type').value=f.ftype||'fiber';
+  document.getElementById('f-zhdun').value=f.zhdun?'1':'0';
   document.getElementById('f-noret-wrap').style.display=(f.ftype==='bomber')?'block':'none';
   document.getElementById('f-noret').value=f.noRet||'';
   document.getElementById('f-lost').value=f.lost?'1':'0';
@@ -1209,6 +1216,7 @@ function dupFlight(id){
   fillSelects();
   document.getElementById('f-drone').value=f.droneId||'';
   document.getElementById('f-type').value=f.ftype||'fiber';
+  document.getElementById('f-zhdun').value=f.zhdun?'1':'0';
   document.getElementById('f-noret-wrap').style.display=(f.ftype==='bomber')?'block':'none';
   document.getElementById('f-noret').value='';
   document.getElementById('f-lost').value=f.lost?'1':'0';
