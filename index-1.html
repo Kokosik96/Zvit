@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1216">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Звіт FPV</title>
+<style>
+:root{
+  --bg:#0f1216; --panel:#171c22; --panel2:#1e242c; --line:#2a323d;
+  --txt:#d9dfe6; --muted:#8b94a0; --accent:#b6c46a; --accent-dk:#3a4224;
+  --amber:#e0a83c; --red:#d96b5a; --green:#7fbf7a;
+  --mono:ui-monospace,'Cascadia Mono','Roboto Mono',monospace;
+}
+html.light{
+  --bg:#eef1f4; --panel:#ffffff; --panel2:#f2f5f8; --line:#d2d9e0;
+  --txt:#1a2028; --muted:#5c6672; --accent:#4a6d1e; --accent-dk:#e4edd2;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{min-height:100vh}
+body{background:var(--bg);color:var(--txt);font:16px/1.45 system-ui,Roboto,sans-serif;
+  padding-bottom:calc(110px + env(safe-area-inset-bottom,0px))}
+header{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;justify-content:space-between;padding:12px 16px}
+header h1{font-size:17px;letter-spacing:.06em;text-transform:uppercase}
+header h1 span{color:var(--accent)}
+header h1 .ver{color:var(--muted);font-size:11px;text-transform:none;letter-spacing:0;margin-left:6px}
+.gear{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:6px 12px;font-size:15px}
+main{padding:14px 14px 20px;max-width:640px;margin:0 auto}
+main::after{content:'';display:block;height:160px}
+.tab{display:none}.tab.on{display:block}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:10;background:var(--panel);border-top:1px solid var(--line);
+  display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;border:none;color:var(--muted);font-size:12.5px;padding:10px 2px 12px;line-height:1.2}
+nav button .ic{display:block;font-size:19px;margin-bottom:2px}
+nav button.on{color:var(--accent)}
+h2{font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;letter-spacing:.03em}
+input,select,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  color:var(--txt);padding:11px 12px;font-size:16px;font-family:inherit}
+textarea{min-height:64px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:10px}.row>*{flex:1;min-width:0}
+.btn{display:block;width:100%;background:var(--accent-dk);border:1px solid var(--accent);color:var(--accent);
+  border-radius:10px;padding:13px;font-size:16px;font-weight:600;margin-top:14px}
+.btn.sec{background:none;border-color:var(--line);color:var(--muted);font-weight:400}
+.btn.warn{border-color:var(--red);color:var(--red);background:none}
+.btn:active{opacity:.7}
+.item{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.item .nm{flex:1;min-width:0;overflow-wrap:anywhere}
+.item .qty{font-family:var(--mono);font-size:17px;min-width:34px;text-align:center}
+.item .qty.zero{color:var(--red)}
+.item.low{border-color:var(--amber)}
+.item .qty.low{color:var(--amber)}
+.pm{width:40px;height:40px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+  color:var(--txt);font-size:20px;flex:none}
+.del{width:40px;height:40px;border-radius:8px;background:none;border:1px solid var(--line);color:var(--red);font-size:16px;flex:none}
+.fl{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.fl .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.fl .tm{font-family:var(--mono);color:var(--accent);font-size:15px}
+.fl .txt{font-size:14px;color:var(--txt);white-space:pre-wrap;overflow-wrap:anywhere}
+.fl .res{font-size:13px;margin-top:6px;color:var(--muted)}
+.fl .acts{display:flex;gap:8px;margin-top:10px}
+.fl .acts button{flex:1;background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:8px;font-size:14px}
+.report{font-family:var(--mono);font-size:13.5px;white-space:pre-wrap;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:12px;overflow-wrap:anywhere}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .v{font-size:26px;font-weight:700;font-family:var(--mono);color:var(--accent)}
+.stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+.seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.seg button{flex:1;background:none;border:none;color:var(--muted);padding:10px;font-size:14px}
+.seg button.on{background:var(--accent-dk);color:var(--accent)}
+.empty{color:var(--muted);text-align:center;padding:26px 10px;font-size:14.5px}
+canvas{width:100%;height:150px;display:block}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:14px;
+  padding:18px;width:min(92vw,480px);margin:auto}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.toast{position:fixed;bottom:86px;left:50%;transform:translateX(-50%);background:var(--accent-dk);
+  border:1px solid var(--accent);color:var(--accent);padding:10px 18px;border-radius:10px;font-size:14.5px;
+  opacity:0;transition:opacity .25s;pointer-events:none;z-index:50;white-space:nowrap}
+.toast.on{opacity:1}
+.note{font-size:12.5px;color:var(--muted);margin-top:8px}
+.badge{font-size:11.5px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.70</span></h1>
+  <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
+</header>
+
+<main>
+
+<!-- ВИЛЬОТИ -->
+<section id="tab-fly" class="tab on">
+  <div class="card">
+    <div class="row">
+      <div><label>Дата</label><input type="date" id="f-date"></div>
+    </div>
+    <div class="row">
+      <div><label>Екіпаж на цю дату</label><input id="f-crew" list="crew-opts" placeholder="позивні через кому" oninput="saveDayCrew()"></div>
+    </div>
+    <datalist id="crew-opts"></datalist>
+    <div class="row">
+      <div><label>Час зльоту</label><input id="f-t1" placeholder="12:14" inputmode="decimal" oninput="updateFlyBtn()"></div>
+      <div><label>Час посадки</label><input id="f-t2" placeholder="12:24" inputmode="decimal" oninput="updateFlyBtn()"></div>
+    </div>
+    <button type="button" class="btn" id="fly-btn" style="margin-top:10px;padding:16px;font-size:17px" onclick="flyStamp()">⏱ Початок польоту</button>
+    <div class="row">
+      <div style="flex:2"><label>Тип вильоту</label>
+        <select id="f-type" onchange="onTypeChange()">
+          <option value="fiber">Камікадзе (оптоволокно)</option>
+          <option value="radio">Камікадзе (радіо)</option>
+          <option value="bomber">Бомбер</option>
+        </select>
+      </div>
+      <div><label>Ждун?</label>
+        <select id="f-zhdun"><option value="0">Ні</option><option value="1">Так</option></select>
+      </div>
+    </div>
+    <div id="f-noret-wrap" style="display:none">
+      <label>Причина неповернення (якщо борт втрачено)</label>
+      <input id="f-noret" list="noret-opts" placeholder="порожньо = повернувся">
+      <datalist id="noret-opts">
+        <option value="збиття"></option>
+        <option value="просадка батареї"></option>
+        <option value="обрив відеозвʼязку"></option>
+        <option value="РЕБ"></option>
+        <option value="зачеп за перешкоду"></option>
+      </datalist>
+    </div>
+    <div class="row">
+      <div style="flex:2"><label>Дрон (зі складу)</label><select id="f-drone"></select></div>
+      <div><label>Дрон списати?</label><select id="f-lost"><option value="1">Так (−1)</option><option value="0">Ні</option></select></div>
+    </div>
+    <div class="row">
+      <div style="flex:2"><label>БК (зі складу)</label><select id="f-ammo"></select></div>
+      <div><label>К-сть БК</label><input id="f-aqty" type="number" value="1" min="0" inputmode="numeric"></div>
+    </div>
+    <label>Ціль (по кому/чому)</label><input id="f-target" list="target-opts" placeholder="напр. живій силі противника">
+    <datalist id="target-opts">
+      <option value="живій силі противника"></option>
+      <option value="техніці противника"></option>
+      <option value="позиції противника"></option>
+      <option value="розвідка"></option>
+      <option value="засідка"></option>
+      <option value="чергування"></option>
+      <option value="спостереження"></option>
+      <option value="супровід"></option>
+    </datalist>
+    <label>Район (квадрат)</label><input id="f-grid" list="grid-opts" placeholder="37U CR 50526 66151" style="font-family:var(--mono)">
+    <datalist id="grid-opts"></datalist>
+    <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
+    <datalist id="loss-opts">
+      <option value="уточнюються"></option>
+      <option value="1х200"></option>
+      <option value="1х300"></option>
+      <option value="2х300"></option>
+      <option value="знищено бліндаж"></option>
+      <option value="знищено позицію"></option>
+      <option value="знищено укриття"></option>
+    </datalist>
+    <button class="btn sec" style="margin-top:8px" onclick="addLoss()">✚ Додати ще втрату</button>
+    <div id="loss-chips" style="margin-top:8px"></div>
+    <label>Результат</label>
+    <select id="f-res">
+      <option>Влучання в ціль</option>
+      <option>Влучання в район цілі</option>
+      <option>Ціль уражена</option>
+      <option>Ціль не знайдено</option>
+      <option>Промах</option>
+      <option>Обрив</option>
+      <option>Зачеп</option>
+      <option>Нерозрив</option>
+      <option>Збиття в районі цілі</option>
+      <option>Втрата керування</option>
+      <option>Втрата дрона (РЕБ)</option>
+      <option>Не виконано</option>
+      <option value="_c">Інше…</option>
+    </select>
+    <input id="f-res-c" placeholder="свій варіант результату" style="display:none;margin-top:8px">
+    <label>Дистанція (якщо є, напр. 9 км)</label>
+    <input id="f-res-dist" placeholder="9 км" style="margin-bottom:4px">
+    <button class="btn" onclick="saveFlight()">✚ Зберегти виліт</button>
+    <button class="btn sec" id="f-cancel" style="display:none" onclick="cancelEdit()">Скасувати редагування</button>
+  </div>
+
+  <div id="day-summary" class="note" style="margin:14px 2px 0"></div>
+  <h2>Вильоти за <span id="fly-day-label"></span></h2>
+  <input id="fly-search" placeholder="🔍 пошук: дрон, ціль, квадрат, результат…" oninput="renderFlights()" style="margin-bottom:10px">
+  <div id="fly-list"></div>
+  <h2>Нотатки дня (не йдуть у звіт)</h2>
+  <textarea id="day-notes" placeholder="погода, РЕБ-обстановка, особливості…" oninput="saveDayNotes()"></textarea>
+</section>
+
+<!-- СКЛАД -->
+<section id="tab-stock" class="tab">
+  <div class="seg" id="stock-seg">
+    <button class="on" data-k="ammo">БК</button>
+    <button data-k="drones">Дрони</button>
+    <button data-k="nbg">Не БГ</button>
+    <button data-k="gear">Майно</button>
+  </div>
+  <div class="card">
+    <div class="row">
+      <div style="flex:2"><label>Назва</label><input id="s-name" placeholder="напр. МОА композит"></div>
+      <div><label>К-сть</label><input id="s-qty" type="number" value="1" min="0" inputmode="numeric"></div>
+      <div style="flex:.7"><label>Од.</label><input id="s-unit" list="unit-opts" placeholder="шт"></div>
+    </div>
+    <datalist id="unit-opts">
+      <option value="шт"></option><option value="л"></option><option value="кг"></option>
+      <option value="м"></option><option value="компл"></option><option value="пар"></option>
+    </datalist>
+    <div id="s-sn-wrap" style="display:none">
+      <label>Серійний номер (якщо є)</label>
+      <input id="s-sn" placeholder="напр. 4587-А23" style="font-family:var(--mono)">
+    </div>
+    <button class="btn" onclick="addStock()">✚ Додати</button>
+  </div>
+  <div id="stock-list"></div>
+  <button class="btn sec" onclick="openIntake()">🔄 Приймання позиції (заїзд на зміну)</button>
+  <div id="shift-info" class="note"></div>
+</section>
+
+<!-- ЗВІТ -->
+<section id="tab-report" class="tab">
+  <div class="seg" id="r-seg" style="flex-wrap:wrap">
+    <button class="on" data-m="flights">Загальний</button>
+    <button data-m="before">До 18:00</button>
+    <button data-m="after">Після 18:00</button>
+    <button data-m="stock">Наявність</button>
+    <button data-m="deliv">Доставка</button>
+  </div>
+  <div class="card" id="r-card">
+    <label>Дата звіту</label><input type="date" id="r-date">
+    <div id="r-loss-wrap"><label>Втрати противника</label><input id="r-losses" list="loss-opts" placeholder="уточнюються"></div>
+  </div>
+  <div id="r-out"></div>
+</section>
+
+<!-- СТАТИСТИКА -->
+<section id="tab-stats" class="tab">
+  <div class="seg" id="stats-seg" style="flex-wrap:wrap">
+    <button data-d="1">Сьогодні</button>
+    <button data-d="7" class="on">7 днів</button>
+    <button data-d="30">30 днів</button>
+    <button data-d="0">Весь час</button>
+    <button data-d="custom">Період</button>
+  </div>
+  <div class="card" id="stats-range" style="display:none;padding:10px 12px">
+    <div class="row">
+      <div><label>Від</label><input type="date" id="st-from" onchange="renderStats()"></div>
+      <div><label>До</label><input type="date" id="st-to" onchange="renderStats()"></div>
+    </div>
+  </div>
+  <div class="card" style="padding:10px 12px">
+    <div class="row">
+      <div><label>Дрон</label><select id="flt-drone" onchange="renderStats()"></select></div>
+      <div><label>БК</label><select id="flt-ammo" onchange="renderStats()"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Результат</label><select id="flt-res" onchange="renderStats()"></select></div>
+    </div>
+    <div class="row">
+      <div><label>Втрати противника</label><select id="flt-loss" onchange="renderStats()"></select></div>
+    </div>
+    <div id="flt-info" class="note"></div>
+  </div>
+  <div class="stats" id="stats-cards"></div>
+  <div class="note" id="dur-note" style="margin:6px 2px 0"></div>
+  <h2>Вильоти по днях</h2>
+  <div class="card"><canvas id="chart" height="150"></canvas></div>
+  <h2>% влучань по тижнях</h2>
+  <div class="card"><canvas id="chart-weeks" height="150"></canvas>
+  <div class="note" id="weeks-note"></div></div>
+  <h2>Розподіл по годинах доби</h2>
+  <div class="card"><canvas id="chart-hours" height="150"></canvas>
+  <div class="note" id="hours-note"></div></div>
+  <h2>Втрати противника</h2>
+  <div class="stats" id="loss-cards"></div>
+  <div id="stats-losses" style="margin-top:10px"></div>
+  <h2>Результати</h2>
+  <div id="stats-res"></div>
+  <h2>Наліт по дронах (вильотів / влучань)</h2>
+  <div id="stats-topdrone"></div>
+  <h2>Ефективність по БК (% влучань)</h2>
+  <div id="stats-ammoeff"></div>
+  <h2>Витрати БК за період</h2>
+  <div id="stats-ammo"></div>
+  <h2>Списано дронів за період</h2>
+  <div id="stats-drones"></div>
+
+  <h2>Експорт звітів за період</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>Від</label><input type="date" id="exp-from"></div>
+      <div><label>До</label><input type="date" id="exp-to"></div>
+    </div>
+    <button class="btn" onclick="exportPeriod()">📋 Зібрати денні звіти</button>
+    <button class="btn" onclick="exportSummary()">📄 Зведення за період</button>
+    <button class="btn sec" onclick="exportCSV()">⬇ Експорт CSV (таблиця)</button>
+    <div id="exp-out" style="margin-top:12px"></div>
+  </div>
+
+  <h2>Історія руху складу</h2>
+  <div class="card">
+    <button class="btn sec" style="margin-top:0" onclick="toggleStockLog()">Показати / сховати лог</button>
+    <div id="stock-log-wrap" style="display:none;margin-top:10px">
+      <label>Фільтр за днем (порожньо = всі)</label>
+      <input type="date" id="log-date" onchange="renderStockLog()" style="margin-bottom:8px">
+      <button class="btn sec" style="margin-top:0;margin-bottom:8px" onclick="document.getElementById('log-date').value='';renderStockLog()">Показати всі дні</button>
+      <div id="stock-log"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ДОСТАВКА -->
+<section id="tab-deliv" class="tab">
+  <div class="card">
+    <div class="row">
+      <div><label>Дата</label><input type="date" id="d-date" onchange="renderDeliv()"></div>
+      <div><label>Напрямок</label>
+        <select id="d-dir">
+          <option value="in">Приїхало (+)</option>
+          <option value="out">Виїхало (−)</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div><label>Категорія</label>
+        <select id="d-kind" onchange="onDelivKindChange()">
+          <option value="ammo">БК</option>
+          <option value="drones">Дрони</option>
+          <option value="gear">Майно</option>
+          <option value="nbg">Не БГ</option>
+          <option value="other">Інше (без складу)</option>
+        </select>
+      </div>
+      <div><label>Оновити склад?</label>
+        <select id="d-apply"><option value="1">Так</option><option value="0">Ні</option></select>
+      </div>
+    </div>
+    <div class="row">
+      <div style="flex:2"><label>Назва</label><input id="d-name" list="deliv-names" placeholder="напр. МОА композит 61"></div>
+      <div><label>К-сть</label><input id="d-qty" type="number" value="1" min="0" inputmode="numeric"></div>
+      <div style="flex:.7"><label>Од.</label><input id="d-unit" list="unit-opts" placeholder="шт"></div>
+    </div>
+    <datalist id="deliv-names"></datalist>
+    <label>Примітка (від кого / куди)</label>
+    <input id="d-note" placeholder="напр. від Батька / на технічку">
+    <button class="btn" onclick="addDeliv()">✚ Записати</button>
+  </div>
+  <h2>Доставка за <span id="deliv-day-label"></span></h2>
+  <div id="deliv-list"></div>
+</section>
+
+</main>
+
+<nav id="nav">
+  <button class="on" data-t="fly"><span class="ic">🛩</span>Вильоти</button>
+  <button data-t="stock"><span class="ic">📦</span>Склад</button>
+  <button data-t="deliv"><span class="ic">🚚</span>Доставка</button>
+  <button data-t="report"><span class="ic">📄</span>Звіт</button>
+  <button data-t="stats"><span class="ic">📊</span>Аналітика</button>
+</nav>
+
+<dialog id="dlg-intake">
+  <h2 style="margin-top:0">Приймання позиції</h2>
+  <p class="note" style="margin-bottom:10px">Впиши фактичні залишки, які застав на позиції. Порожнє поле = 0.</p>
+  <div class="row" style="margin-bottom:8px">
+    <button class="btn sec" style="margin-top:0" onclick="intakeZeroAll()">Обнулити все</button>
+    <button class="btn sec" style="margin-top:0" onclick="intakeKeepAll()">Лишити як є</button>
+  </div>
+  <div id="intake-body" style="max-height:52vh;overflow-y:auto"></div>
+  <button class="btn" onclick="applyIntake()">✓ Прийняти позицію</button>
+  <button class="btn sec" onclick="dlgIntake.close()">Скасувати</button>
+</dialog>
+
+<dialog id="dlg-set">
+  <h2 style="margin-top:0">Мої дані (для шапки звіту)</h2>
+  <label>Підрозділ</label><input id="set-unit" placeholder="бБпС 127 овмбр">
+  <label>Позиція БпЛА</label><input id="set-pos" placeholder="СОНЕЧКО">
+  <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
+  <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
+  <label>Скільки копій тримати в папці</label><input id="set-keep" type="number" min="1" max="10" value="3" inputmode="numeric">
+  <label>Година розділу звітів (до/після)</label><input id="set-cut" type="number" min="0" max="23" value="18" inputmode="numeric">
+  <button class="btn sec" id="theme-btn" onclick="toggleTheme()">☀ Світла тема</button>
+  <button class="btn" onclick="saveSettings()">Зберегти</button>
+  <button class="btn warn" onclick="exportData()">⬇ Резервна копія даних (файл)</button>
+  <label style="margin-top:14px">Відновити з копії</label>
+  <input type="file" id="imp-file" accept=".json" onchange="importData(this)">
+  <button class="btn sec" onclick="forceUpdate()">🔄 Перевірити оновлення</button>
+  <button class="btn sec" onclick="restoreSnapshot()">⏱ Відновити з автозбереження</button>
+  <button class="btn sec" onclick="undoImport()">↩ Відкотити останнє відновлення</button>
+  <button class="btn sec" id="folder-btn" onclick="pickBackupFolder()">📁 Папка для автобекапу</button>
+  <div id="folder-info" class="note"></div>
+  <div id="storage-info" class="note" style="margin-top:8px"></div>
+  <button class="btn sec" onclick="dlgSet.close()">Закрити</button>
+</dialog>
+
+<dialog id="dlg-stock">
+  <h2 style="margin-top:0">Редагувати позицію</h2>
+  <label>Назва</label><input id="e-name">
+  <div class="row">
+    <div><label>К-сть</label><input id="e-qty" type="number" min="0" inputmode="numeric"></div>
+    <div><label>Од.</label><input id="e-unit" list="unit-opts" placeholder="шт"></div>
+  </div>
+  <div id="e-sn-wrap"><label>Серійний номер</label><input id="e-sn" style="font-family:var(--mono)"></div>
+  <button class="btn" onclick="saveStockEdit()">Зберегти</button>
+  <button class="btn sec" onclick="dlgStock.close()">Скасувати</button>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== storage ===== */
+let mem=null;
+const KEY='zvitfpv1';
+function load(){
+  try{const s=localStorage.getItem(KEY); if(s) return JSON.parse(s);}catch(e){}
+  return mem||{settings:{unit:'',position:''},ammo:[],drones:[],gear:[],flights:[]};
+}
+function storageInfo(){
+  let total=0;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      total+=((localStorage.getItem(k)||'').length+k.length)*2; // UTF-16
+    }
+  }catch(e){}
+  return{bytes:total,kb:Math.round(total/1024),pct:Math.round(total/(5*1024*1024)*100)};
+}
+let storageWarned=false;
+function save(){
+  mem=S;
+  try{
+    const json=JSON.stringify(S);
+    localStorage.setItem(KEY,json);
+    // знімок раз на день, тримаємо 3 останні (не 5 — економія місця)
+    const today=todayISO();
+    let snaps={};
+    try{snaps=JSON.parse(localStorage.getItem(KEY+'-snaps')||'{}');}catch(e){}
+    if(!snaps[today]){
+      snaps[today]=json;
+      const days=Object.keys(snaps).sort();
+      while(days.length>3){delete snaps[days.shift()];}
+      try{localStorage.setItem(KEY+'-snaps',JSON.stringify(snaps));}
+      catch(e){
+        // місця нема — лишаємо тільки найсвіжіший знімок
+        try{localStorage.setItem(KEY+'-snaps',JSON.stringify({[today]:json}));}catch(e2){
+          try{localStorage.removeItem(KEY+'-snaps');}catch(e3){}
+        }
+      }
+    }
+    // попередження при заповненні
+    const info=storageInfo();
+    if(info.pct>=80&&!storageWarned){
+      storageWarned=true;
+      setTimeout(()=>toast(`⚠ Памʼять заповнена на ${info.pct}% — зроби бекап (⚙)`),800);
+    }
+  }catch(e){
+    // основне сховище переповнене — звільняємо знімки і пробуємо ще раз
+    try{localStorage.removeItem(KEY+'-snaps');localStorage.removeItem(KEY+'-prev');}catch(e2){}
+    try{localStorage.setItem(KEY,JSON.stringify(S));toast('⚠ Памʼять майже повна — старі автозбереження очищено');}
+    catch(e3){toast('⚠ Дані лише в памʼяті! Терміново зроби бекап у файл (⚙)');}
+  }
+}
+let S=load();
+if(!S.nbg)S.nbg=[];
+// синхронізація між вкладками: якщо інша вкладка зберегла дані — підхопити при поверненні
+window.addEventListener('storage',e=>{
+  if(e.key===KEY&&e.newValue){
+    try{S=JSON.parse(e.newValue);mem=S;renderAll();}catch(err){}
+  }
+});
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    try{const s=localStorage.getItem(KEY);if(s){const fresh=JSON.parse(s);
+      if(JSON.stringify(fresh)!==JSON.stringify(S)){S=fresh;mem=S;renderAll();}}}catch(e){}
+  }
+});
+// міграція: час 12.14 → 12:14 у старих записах
+if(S.flights)S.flights.forEach(f=>{if(f.t1)f.t1=f.t1.replace(/[.,]/g,':');if(f.t2)f.t2=f.t2.replace(/[.,]/g,':');});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+// нормалізація назви для порівняння: прибирає подвійні пробіли і регістр
+const nkey=s=>String(s||'').trim().replace(/\s+/g,' ').toLowerCase();
+function logStock(action,kind,name,delta,note){
+  if(!S.stockLog)S.stockLog=[];
+  S.stockLog.unshift({id:uid(),ts:Date.now(),action,kind,name,delta:delta||0,note:note||''});
+  if(S.stockLog.length>500)S.stockLog.length=500;
+}
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const fmtDate=iso=>{const[y,m,d]=iso.split('-');return d+'.'+m+'.'+y;};
+const esc=s=>String(s??'').replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+
+/* ===== toast ===== */
+let toastT;
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2200);}
+
+/* ===== nav ===== */
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.getElementById('tab-'+b.dataset.t).classList.add('on');
+  if(b.dataset.t==='report')renderReport();
+  if(b.dataset.t==='stats')renderStats();
+  if(b.dataset.t==='stock')renderStock();
+  if(b.dataset.t==='fly')renderFlights();
+  if(b.dataset.t==='deliv')renderDeliv();
+});
+
+/* ===== settings ===== */
+const dlgSet=document.getElementById('dlg-set');
+function openSettings(){
+  document.getElementById('set-unit').value=S.settings.unit;
+  document.getElementById('set-pos').value=S.settings.position;
+  document.getElementById('set-crew').value=S.settings.crew||'';
+  document.getElementById('set-low').value=S.settings.lowThreshold??2;
+  document.getElementById('set-keep').value=S.settings.keepBackups??3;
+  document.getElementById('set-cut').value=S.settings.cutHour??18;
+  const si=document.getElementById('storage-info');
+  if(si){const inf=storageInfo();
+    const fl=(S.flights||[]).length;
+    si.innerHTML=`Памʼять: ${inf.kb} КБ (${inf.pct}% ліміту) · вильотів: ${fl}`+
+      (inf.pct>=70?' <b style="color:var(--amber)">— час робити бекапи регулярно</b>':'');}
+  const fi=document.getElementById('folder-info');
+  if(S.settings.fileBackup==='folder')fi.textContent='✓ Автобекап у папку: раз на день'+(S.lastFileBackup?' (останній: '+fmtDate(S.lastFileBackup)+')':'');
+  else if(S.settings.fileBackup==='dialog')fi.textContent='Автобекап через діалог збереження, раз на день';
+  else fi.textContent='';
+  dlgSet.showModal();
+}
+function saveSettings(){
+  S.settings.unit=document.getElementById('set-unit').value.trim();
+  S.settings.position=document.getElementById('set-pos').value.trim();
+  S.settings.crew=document.getElementById('set-crew').value.trim();
+  S.settings.lowThreshold=Math.max(0,parseInt(document.getElementById('set-low').value)||0);
+  S.settings.keepBackups=Math.min(10,Math.max(1,parseInt(document.getElementById('set-keep').value)||3));
+  S.settings.cutHour=Math.min(23,Math.max(0,parseInt(document.getElementById('set-cut').value)??18));
+  const rs=document.getElementById('r-seg');
+  if(rs){const cs=String(S.settings.cutHour).padStart(2,'0')+':00';
+    rs.querySelector('[data-m="before"]').textContent='До '+cs;
+    rs.querySelector('[data-m="after"]').textContent='Після '+cs;}
+  save();dlgSet.close();toast('Збережено');
+  if(S.settings.fileBackup==='folder')cleanOldBackups(S.settings.keepBackups);
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='zvit-fpv-backup-'+todayISO()+'.json';a.click();
+}
+function importData(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    let data;
+    try{data=JSON.parse(r.result);}catch(e){toast('⚠ Файл пошкоджено (не JSON)');inp.value='';return;}
+    // валідація структури — щоб битий/чужий файл не стер робочі дані
+    const ok=data&&typeof data==='object'&&
+      Array.isArray(data.flights)&&Array.isArray(data.ammo)&&
+      Array.isArray(data.drones)&&Array.isArray(data.gear);
+    if(!ok){toast('⚠ Це не схоже на бекап Звіт FPV — скасовано');inp.value='';return;}
+    const cnt=`${data.flights.length} вильотів, склад: ${data.ammo.length+data.drones.length+data.gear.length} поз.`;
+    if(!confirm(`Замінити поточні дані на дані з файлу?\n\nУ файлі: ${cnt}\n\nПоточні дані буде перезаписано.`)){inp.value='';return;}
+    // страхувальний бекап поточного стану перед заміною
+    try{localStorage.setItem(KEY+'-prev',localStorage.getItem(KEY)||'');}catch(e){}
+    S=data;if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Дані відновлено (попередні збережено про запас)');
+    inp.value='';
+  };
+  r.readAsText(f);
+}
+async function forceUpdate(){
+  toast('Перевіряю оновлення…');
+  try{
+    // 1) скидаємо кеш застосунку
+    if(window.caches){
+      const keys=await caches.keys();
+      await Promise.all(keys.map(k=>caches.delete(k)));
+    }
+    // 2) оновлюємо service worker
+    if(navigator.serviceWorker){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r=>r.update().catch(()=>{})));
+    }
+    // 3) тягнемо свіжу сторінку в обхід кешу
+    await fetch('index.html?ts='+Date.now(),{cache:'reload'}).catch(()=>{});
+    toast('Перезапускаю…');
+    setTimeout(()=>location.reload(true),600);
+  }catch(e){
+    toast('Не вдалося — перевір інтернет');
+  }
+}
+function restoreSnapshot(){
+  let snaps={};
+  try{snaps=JSON.parse(localStorage.getItem(KEY+'-snaps')||'{}');}catch(e){}
+  const days=Object.keys(snaps).sort().reverse();
+  if(!days.length){toast('Автозбережень поки немає');return;}
+  const list=days.map((d,i)=>{
+    let c=0;try{c=(JSON.parse(snaps[d]).flights||[]).length;}catch(e){}
+    return `${i+1}) ${fmtDate(d)} — ${c} вильотів`;
+  }).join('\n');
+  const ans=prompt(`Автозбереження (введи номер):\n\n${list}`,'1');
+  if(!ans)return;
+  const idx=parseInt(ans)-1;
+  if(idx<0||idx>=days.length){toast('Невірний номер');return;}
+  try{localStorage.setItem(KEY+'-prev',localStorage.getItem(KEY)||'');}catch(e){}
+  try{S=JSON.parse(snaps[days[idx]]);if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Відновлено на '+fmtDate(days[idx]));}
+  catch(e){toast('⚠ Не вдалося відновити');}
+}
+function undoImport(){
+  let prev;
+  try{prev=localStorage.getItem(KEY+'-prev');}catch(e){}
+  if(!prev){toast('Немає попередніх даних для відкату');return;}
+  if(!confirm('Повернути дані, які були ДО останнього відновлення з файлу?'))return;
+  try{S=JSON.parse(prev);if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Повернуто попередні дані');}
+  catch(e){toast('⚠ Не вдалося відкотити');}
+}
+
+/* ===== доставка ===== */
+const KIND_LABEL={ammo:'БК',drones:'Дрони',gear:'Майно',nbg:'Не БГ',other:'Інше'};
+function fillDelivNames(){
+  const dl=document.getElementById('deliv-names');
+  if(!dl)return;
+  const kind=document.getElementById('d-kind')?.value||'ammo';
+  const set=new Set();
+  if(kind==='other'){
+    (S.deliveries||[]).filter(d=>d.kind==='other').forEach(d=>set.add(d.name));
+  }else{
+    (S[kind]||[]).forEach(i=>set.add(i.name));
+    // для "Не БГ" підказуємо ще й назви наявних дронів
+    if(kind==='nbg')(S.drones||[]).forEach(i=>set.add(i.name));
+    (S.deliveries||[]).filter(d=>d.kind===kind).forEach(d=>set.add(d.name));
+  }
+  dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b,'uk')).map(n=>`<option value="${esc(n)}"></option>`).join('');
+}
+function onDelivKindChange(){
+  fillDelivNames();
+  const inp=document.getElementById('d-name');
+  inp.value='';
+  const k=document.getElementById('d-kind').value;
+  inp.placeholder={ammo:'напр. МОА композит 61',drones:'напр. Інквізитор 10/15 км день',
+    gear:'напр. Патч-корд',nbg:'назва дрона',other:'напр. бензин'}[k]||'назва';
+}
+function addDeliv(){
+  const date=document.getElementById('d-date').value||todayISO();
+  const dir=document.getElementById('d-dir').value;
+  const kind=document.getElementById('d-kind').value;
+  const apply=document.getElementById('d-apply').value==='1'&&kind!=='other';
+  const name=document.getElementById('d-name').value.trim().replace(/\s+/g,' ');
+  const qty=Math.max(0,parseInt(document.getElementById('d-qty').value)||0);
+  const unit=(document.getElementById('d-unit').value.trim()||'шт').replace(/\.$/,'');
+  const note=document.getElementById('d-note').value.trim();
+  if(!name){toast('Введи назву');return;}
+  if(!qty){toast('Вкажи кількість');return;}
+  let appliedQty=0;
+  if(apply){
+    const list=S[kind]||(S[kind]=[]);
+    if(dir==='in'){
+      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn);
+      if(it){it.qty+=qty;}
+      else{const o={id:uid(),name,qty};if(unit!=='шт')o.unit=unit;list.push(o);}
+      appliedQty=qty;
+      logStock('доставка (приїхало)',kind,name,qty,note);
+    }else{
+      // шукаємо будь-яку позицію з такою назвою (з серійником теж)
+      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn)
+           ||list.find(i=>nkey(i.name)===nkey(name));
+      if(!it){toast('«'+name+'» немає на складі — записано без списання');}
+      else{
+        const take=Math.min(it.qty,qty);
+        it.qty-=take;appliedQty=take;
+        logStock('доставка (виїхало)',kind,name,-take,note);
+        if(take<qty)toast(`На складі було ${take} — списано ${take}`);
+      }
+    }
+  }
+  if(!S.deliveries)S.deliveries=[];
+  S.deliveries.unshift({id:uid(),date,dir,kind,name,qty,unit,note,applied:apply,appliedQty});
+  if(S.deliveries.length>500)S.deliveries.length=500;
+  document.getElementById('d-name').value='';
+  document.getElementById('d-qty').value=1;
+  document.getElementById('d-unit').value='';
+  document.getElementById('d-note').value='';
+  save();renderDeliv();renderStock();fillSelects();
+  toast(dir==='in'?'Записано: приїхало':'Записано: виїхало');
+}
+function delDeliv(id){
+  const d=(S.deliveries||[]).find(x=>x.id===id);if(!d)return;
+  const aq=d.appliedQty!==undefined?d.appliedQty:0;
+  const back=aq?`\n\nСклад буде повернуто до попереднього стану (${aq} ${d.unit||'шт'}).`:'';
+  if(!confirm(`Видалити запис «${d.name} — ${d.qty} ${d.unit||'шт'}»?${back}`))return;
+  if(aq&&d.kind!=='other'){
+    const list=S[d.kind]||[];
+    const it=list.find(i=>nkey(i.name)===nkey(d.name)&&!i.sn)
+           ||list.find(i=>nkey(i.name)===nkey(d.name));
+    if(it){
+      if(d.dir==='in'){it.qty=Math.max(0,it.qty-aq);logStock('відкат доставки',d.kind,d.name,-aq,'видалення запису');}
+      else{it.qty+=aq;logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');}
+    }
+  }
+  S.deliveries=S.deliveries.filter(x=>x.id!==id);
+  save();renderDeliv();renderStock();fillSelects();
+}
+function renderDeliv(){
+  const date=document.getElementById('d-date').value||todayISO();
+  document.getElementById('d-date').value=date;
+  const lbl=document.getElementById('deliv-day-label');
+  if(lbl)lbl.textContent=fmtDate(date);
+  fillDelivNames();
+  const arr=(S.deliveries||[]).filter(d=>d.date===date);
+  const el=document.getElementById('deliv-list');
+  if(!el)return;
+  if(!arr.length){el.innerHTML='<div class="empty">Записів за цю дату немає</div>';return;}
+  el.innerHTML=arr.map(d=>`<div class="item" style="border-color:${d.dir==='in'?'var(--green)':'var(--amber)'}">
+    <div class="nm" style="font-size:14px">
+      <span style="color:${d.dir==='in'?'var(--green)':'var(--amber)'}">${d.dir==='in'?'▲ приїхало':'▼ виїхало'}</span>
+      · ${esc(KIND_LABEL[d.kind]||d.kind)}<br>
+      ${esc(d.name)}${d.note?`<div style="font-size:12.5px;color:var(--muted)">${esc(d.note)}</div>`:''}
+    </div>
+    <div class="qty" style="min-width:auto">${d.qty} <span style="font-size:11px;color:var(--muted)">${esc(d.unit||'шт')}</span></div>
+    <button class="del" onclick="delDeliv('${d.id}')">✕</button>
+  </div>`).join('');
+}
+function buildDelivReport(date){
+  const arr=(S.deliveries||[]).filter(d=>d.date===date);
+  let lines=[];
+  lines.push('Звіт по доставці '+fmtDate(date));
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  const cr=crewFor(date);if(cr)lines.push('Екіпаж: '+cr);
+  lines.push('');
+  if(!arr.length){lines.push('Рухів не було.');return lines.join('\n');}
+  // порядок і назви категорій у звіті
+  const CATS=[['ammo','БК'],['drones','Дрони'],['nbg','Не БГ дрони'],['gear','Майно'],['other','Інше']];
+  const line=d=>`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`;
+  const section=(title,list)=>{
+    lines.push(title);
+    if(!list.length){lines.push('• —');return;}
+    let first=true;
+    CATS.forEach(([k,label])=>{
+      const items=list.filter(d=>(d.kind||'other')===k);
+      if(!items.length)return;
+      if(!first)lines.push('');
+      lines.push(label+':');
+      items.forEach(d=>lines.push(line(d)));
+      first=false;
+    });
+    // на випадок невідомої категорії — щоб нічого не загубилось
+    const known=CATS.map(c=>c[0]);
+    const rest=list.filter(d=>!known.includes(d.kind||'other'));
+    if(rest.length){if(!first)lines.push('');lines.push('Інше:');rest.forEach(d=>lines.push(line(d)));}
+  };
+  section('ПРИЇХАЛО:',arr.filter(d=>d.dir==='in'));
+  lines.push('');
+  section('ВИЇХАЛО:',arr.filter(d=>d.dir==='out'));
+  return lines.join('\n');
+}
+
+/* ===== приймання позиції ===== */
+const dlgIntake=document.getElementById('dlg-intake');
+const INTAKE_KINDS=[['ammo','БК'],['drones','Дрони'],['nbg','Не БГ'],['gear','Майно']];
+function openIntake(){renderIntakeBody();dlgIntake.showModal();}
+function renderIntakeBody(){
+  const el=document.getElementById('intake-body');
+  let html='';
+  INTAKE_KINDS.forEach(([k,label])=>{
+    const arr=(S[k]||[]).slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
+    if(!arr.length)return;
+    html+=`<h2 style="margin:12px 0 6px">${label}</h2>`;
+    arr.forEach(i=>{
+      html+=`<div class="item" style="padding:8px 10px">
+        <div class="nm" style="font-size:14px">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">SN: ${esc(i.sn)}</div>`:''}</div>
+        <input class="intake-q" data-kind="${k}" data-id="${i.id}" type="number" min="0" inputmode="numeric"
+          value="${i.qty}" style="width:76px;text-align:center;padding:8px">
+        ${i.unit?`<span style="font-size:12px;color:var(--muted)">${esc(i.unit)}</span>`:''}
+      </div>`;
+    });
+  });
+  el.innerHTML=html||'<div class="empty">Склад порожній — додай позиції звичайним способом</div>';
+}
+function intakeZeroAll(){document.querySelectorAll('.intake-q').forEach(i=>i.value=0);}
+function intakeKeepAll(){renderIntakeBody();}
+function applyIntake(){
+  const inputs=[...document.querySelectorAll('.intake-q')];
+  const changes=[];
+  inputs.forEach(inp=>{
+    const kind=inp.dataset.kind,id=inp.dataset.id;
+    const it=(S[kind]||[]).find(x=>x.id===id);if(!it)return;
+    const nv=Math.max(0,parseInt(inp.value)||0);
+    if(nv!==it.qty)changes.push({kind,it,from:it.qty,to:nv});
+  });
+  if(!changes.length){dlgIntake.close();toast('Змін немає');return;}
+  const preview=changes.slice(0,8).map(c=>`${c.it.name}: ${c.from} → ${c.to}`).join('\n');
+  const more=changes.length>8?`\n…і ще ${changes.length-8}`:'';
+  if(!confirm(`Прийняти позицію? Змін: ${changes.length}\n\n${preview}${more}`))return;
+  changes.forEach(c=>{c.it.qty=c.to;});
+  const today=todayISO();
+  logStock('приймання позиції','—',`оновлено позицій: ${changes.length}`,0,fmtDate(today));
+  // деталі кожної зміни — щоб при звірці було видно, що саме змінилось
+  changes.forEach(c=>logStock('  ↳ приймання',c.kind,c.it.name,c.to-c.from,`було ${c.from} → стало ${c.to}`));
+  if(!S.shifts)S.shifts=[];
+  S.shifts.unshift({id:uid(),date:today,changed:changes.length});
+  if(S.shifts.length>50)S.shifts.length=50;
+  save();renderStock();fillSelects();dlgIntake.close();
+  toast(`Позицію прийнято (${changes.length} змін)`);
+}
+function renderShiftInfo(){
+  const el=document.getElementById('shift-info');
+  if(!el)return;
+  const last=(S.shifts||[])[0];
+  el.textContent=last?`Останнє приймання: ${fmtDate(last.date)} (змінено позицій: ${last.changed})`:'';
+}
+
+/* ===== stock ===== */
+let stockKind='ammo';
+document.getElementById('stock-seg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;stockKind=b.dataset.k;
+  document.querySelectorAll('#stock-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('s-sn-wrap').style.display=stockKind==='gear'?'block':'none';
+  renderStock();
+});
+function addStock(){
+  const n=document.getElementById('s-name').value.trim().replace(/\s+/g,' ');
+  const q=Math.max(0,parseInt(document.getElementById('s-qty').value)||0);
+  const sn=stockKind==='gear'?document.getElementById('s-sn').value.trim():'';
+  const unit=(document.getElementById('s-unit').value.trim()||'шт').replace(/\.$/,'');
+  if(!n){toast('Введи назву');return;}
+  if(stockKind==='nbg'){
+    const qty=q||1;
+    const drone=S.drones.find(i=>nkey(i.name)===nkey(n));
+    if(drone){
+      const take=Math.min(drone.qty,qty);
+      drone.qty-=take;
+      logStock('переведено в не БГ','drones',drone.name,-take,'');
+      if(take<qty)toast(`У наявності було лише ${take} — переведено ${take}`);
+    }else{
+      logStock('додано в не БГ','drones',n,0,'не знайдено серед наявних');
+    }
+    const ex=S.nbg.find(i=>nkey(i.name)===nkey(n));
+    if(ex)ex.qty+=qty;else S.nbg.push({id:uid(),name:n,qty:qty});
+  }else if(sn){
+    const item={id:uid(),name:n,qty:q||1,sn:sn};
+    if(unit!=='шт')item.unit=unit;
+    S[stockKind].push(item);
+    logStock('додано',stockKind,n,q||1,'SN: '+sn);
+  }else{
+    const ex=S[stockKind].find(i=>nkey(i.name)===nkey(n)&&!i.sn);
+    if(ex){ex.qty+=q;if(unit!=='шт')ex.unit=unit;}
+    else{const item={id:uid(),name:n,qty:q};if(unit!=='шт')item.unit=unit;S[stockKind].push(item);}
+    logStock('додано',stockKind,n,q||1,unit!=='шт'?unit:'');
+  }
+  document.getElementById('s-name').value='';document.getElementById('s-qty').value=1;document.getElementById('s-unit').value='';
+  if(stockKind==='gear')document.getElementById('s-sn').value='';
+  save();renderStock();fillSelects();
+}
+function nbgToTech(id){
+  const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
+  if(!confirm(`Передати «${it.name}» технікам? (1 шт. з ${it.qty})`))return;
+  it.qty--;
+  logStock('передано на технічку','drones',it.name,-1,'з не БГ');
+  // фіксуємо у доставці (без повторного списання — воно вже зроблено вище)
+  if(!S.deliveries)S.deliveries=[];
+  S.deliveries.unshift({id:uid(),date:todayISO(),dir:'out',kind:'nbg',
+    name:it.name,qty:1,unit:'шт',note:'на технічку',applied:false});
+  if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();renderDeliv();toast('Передано технікам: '+it.name);
+}
+function nbgReturn(id){
+  const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
+  it.qty--;
+  const drone=S.drones.find(i=>nkey(i.name)===nkey(it.name));
+  if(drone)drone.qty++;else S.drones.push({id:uid(),name:it.name,qty:1});
+  logStock('повернуто в стрій','drones',it.name,1,'з не БГ');
+  if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();toast('Повернуто в стрій: '+it.name);
+}
+function chQty(kind,id,d){
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  const old=it.qty;
+  it.qty=Math.max(0,it.qty+d);
+  if(it.qty!==old)logStock('коригування',kind,it.name,it.qty-old,'вручну');
+  save();renderStock();fillSelects();
+}
+function bulkQty(kind,id){
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  const ans=prompt(`«${it.name}» — зараз ${it.qty} шт.\nВведи зміну: +5 (додати) або -3 (відняти):`);
+  if(ans===null)return;
+  const d=parseInt(ans.replace(/\s+/g,''));
+  if(isNaN(d)||d===0){toast('Введи число, напр. +5 або -3');return;}
+  const old=it.qty;
+  it.qty=Math.max(0,it.qty+d);
+  const applied=it.qty-old;
+  if(applied!==0){
+    logStock('коригування',kind,it.name,applied,'пакетно');
+    if(applied!==d)toast(`Застосовано ${applied} (менше нуля не можна)`);
+    else toast(`${it.name}: ${old} → ${it.qty}`);
+  }
+  save();renderStock();fillSelects();
+}
+function delStock(kind,id){
+  const it=S[kind].find(i=>i.id===id);
+  if(!it)return;
+  if(!confirm('Видалити «'+it.name+'» зі складу?'))return;
+  logStock('видалено з обліку',kind,it.name,-it.qty,it.sn?'SN: '+it.sn:'');
+  S[kind]=S[kind].filter(i=>i.id!==id);save();renderStock();fillSelects();
+}
+let editStockRef=null;
+const dlgStock=document.getElementById('dlg-stock');
+function editStock(kind,id){
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  editStockRef={kind,id};
+  document.getElementById('e-name').value=it.name;
+  document.getElementById('e-qty').value=it.qty;
+  document.getElementById('e-unit').value=it.unit||'';
+  document.getElementById('e-sn').value=it.sn||'';
+  document.getElementById('e-sn-wrap').style.display=kind==='gear'?'block':'none';
+  dlgStock.showModal();
+}
+function saveStockEdit(){
+  if(!editStockRef)return;
+  const{kind,id}=editStockRef;
+  const it=S[kind].find(i=>i.id===id);if(!it)return;
+  const n=document.getElementById('e-name').value.trim().replace(/\s+/g,' ');
+  if(!n){toast('Назва не може бути порожньою');return;}
+  const oldName=it.name;
+  const oldQty=it.qty;
+  it.name=n;
+  it.qty=Math.max(0,parseInt(document.getElementById('e-qty').value)||0);
+  if(it.qty!==oldQty)logStock('коригування',kind,n,it.qty-oldQty,'через редагування');
+  if(oldName!==n)logStock('перейменовано',kind,n,0,'було: '+oldName);
+  const eu=(document.getElementById('e-unit').value.trim()||'').replace(/\.$/,'');
+  if(eu&&eu!=='шт')it.unit=eu;else delete it.unit;
+  if(kind==='gear'){const sn=document.getElementById('e-sn').value.trim();if(sn)it.sn=sn;else delete it.sn;}
+  // оновлюємо назву в минулих вильотах, щоб звіти лишались коректними
+  if(oldName!==n){
+    S.flights.forEach(f=>{
+      if(kind==='drones'&&f.droneId===id)f.droneName=n;
+      if(kind==='ammo'&&f.ammoId===id)f.ammoName=n;
+    });
+  }
+  save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
+}
+function renderStock(){
+  renderShiftInfo();
+  const arr=S[stockKind].slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
+  const el=document.getElementById('stock-list');
+  // підказка назв дронів у формі для Не БГ
+  const nameInp=document.getElementById('s-name');
+  if(stockKind==='nbg'){
+    nameInp.setAttribute('list','drone-names');
+    let dl=document.getElementById('drone-names');
+    if(!dl){dl=document.createElement('datalist');dl.id='drone-names';document.body.appendChild(dl);}
+    dl.innerHTML=S.drones.map(d=>`<option value="${esc(d.name)}"></option>`).join('');
+    nameInp.placeholder='назва дрона зі складу';
+  }else{
+    nameInp.removeAttribute('list');
+    nameInp.placeholder='напр. МОА композит';
+  }
+  if(!arr.length){el.innerHTML='<div class="empty">'+(stockKind==='nbg'?'Не БГ дронів немає':'Порожньо. Додай перший запис ↑')+'</div>';return;}
+  if(stockKind==='nbg'){
+    el.innerHTML=arr.map(i=>`<div class="item" style="border-color:var(--red)">
+      <div class="nm">${esc(i.name)}</div>
+      <div class="qty" style="color:var(--red);cursor:pointer;text-decoration:underline dotted var(--muted)" onclick="bulkQty('nbg','${i.id}')">${i.qty}</div>
+      <button class="del" style="color:var(--green);width:auto;padding:0 8px;font-size:13px" onclick="nbgReturn('${i.id}')">↩ стрій</button>
+      <button class="del" style="color:var(--amber);width:auto;padding:0 8px;font-size:13px" onclick="nbgToTech('${i.id}')">🔧</button>
+      <button class="del" style="color:var(--muted)" onclick="editStock('nbg','${i.id}')">✎</button>
+      <button class="del" onclick="delStock('nbg','${i.id}')">✕</button>
+    </div>`).join('');
+    return;
+  }
+  const low=S.settings.lowThreshold??2;
+  const chk=(stockKind==='ammo'||stockKind==='drones');
+  el.innerHTML=arr.map(i=>{
+    const isLow=chk&&i.qty>0&&i.qty<=low;
+    return `<div class="item ${isLow?'low':''}">
+    <div class="nm">${esc(i.name)}${i.sn?`<div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:2px">SN: ${esc(i.sn)}</div>`:''}</div>
+    <button class="pm" onclick="chQty('${stockKind}','${i.id}',-1)">−</button>
+    <div class="qty ${i.qty===0?'zero':isLow?'low':''}" onclick="bulkQty('${stockKind}','${i.id}')" style="cursor:pointer;text-decoration:underline dotted var(--muted)">${i.qty}${i.unit?`<span style="font-size:11px;color:var(--muted)"> ${esc(i.unit)}</span>`:``}</div>
+    <button class="pm" onclick="chQty('${stockKind}','${i.id}',1)">+</button>
+    <button class="del" style="color:var(--muted)" onclick="editStock('${stockKind}','${i.id}')">✎</button>
+    <button class="del" onclick="delStock('${stockKind}','${i.id}')">✕</button>
+  </div>`;}).join('');
+}
+
+/* ===== flights ===== */
+let editId=null;
+function fillSelects(){
+  const d=document.getElementById('f-drone'),a=document.getElementById('f-ammo');
+  const dv=d.value,av=a.value;
+  d.innerHTML='<option value="">— обери дрон —</option>'+S.drones.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.qty})</option>`).join('');
+  a.innerHTML='<option value="">— без БК —</option>'+S.ammo.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.qty})</option>`).join('');
+  d.value=dv;a.value=av;
+}
+document.getElementById('f-res').addEventListener('change',e=>{
+  document.getElementById('f-res-c').style.display=e.target.value==='_c'?'block':'none';
+});
+document.getElementById('f-date').addEventListener('change',renderFlights);
+
+function nowHM(){
+  const d=new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function flyStamp(){
+  const t1=document.getElementById('f-t1'),t2=document.getElementById('f-t2');
+  if(!t1.value.trim()){
+    t1.value=nowHM();toast('Зліт: '+t1.value);
+  }else if(!t2.value.trim()){
+    t2.value=nowHM();toast('Посадка: '+t2.value);
+  }else{
+    if(!confirm('Обидва часи вже заповнені. Почати новий відлік? (зліт = зараз, посадка очиститься)'))return;
+    t1.value=nowHM();t2.value='';toast('Новий відлік. Зліт: '+t1.value);
+  }
+  updateFlyBtn();
+}
+function updateFlyBtn(){
+  const b=document.getElementById('fly-btn');
+  if(!b)return;
+  const t1=document.getElementById('f-t1').value.trim();
+  const t2=document.getElementById('f-t2').value.trim();
+  if(!t1)b.textContent='⏱ Початок польоту';
+  else if(!t2)b.textContent='⏱ Кінець польоту';
+  else b.textContent='⏱ Новий відлік';
+}
+function onTypeChange(){
+  const t=document.getElementById('f-type').value;
+  // бомбер повертається — за замовчуванням не списуємо
+  document.getElementById('f-lost').value=t==='bomber'?'0':'1';
+  const w=document.getElementById('f-noret-wrap');
+  w.style.display=t==='bomber'?'block':'none';
+  if(t!=='bomber')document.getElementById('f-noret').value='';
+}
+// цілі, що пишуться без "по" (називний відмінок)
+const STANDALONE_TARGETS=['розвідк','засідк','чергуванн','спостереженн','супров','патрулюванн','ретрансл'];
+function standaloneTarget(t){
+  const s=String(t||'').trim().toLowerCase();
+  return STANDALONE_TARGETS.some(w=>s.startsWith(w));
+}
+function strikePhrase(f){
+  const t=f.ftype||'fiber';
+  const tags=[];
+  if(f.zhdun)tags.push('ждун');
+  if(f.noRet)tags.push(f.noRet);
+  const nr=tags.length?` (${tags.join(', ')})`:'';
+  if(t==='bomber')return `скид з бомбера ${f.droneName}${nr}`;
+  if(t==='radio')return `удар дроном-камікадзе ${f.droneName}${nr}`;
+  return `удар дроном-камікадзе на оптоволокні ${f.droneName}${nr}`;
+}
+function flightText(f){
+  const pos=f.position?`(позиція FPV “${f.position}”), `:'';
+  const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:' ( без БК )';
+  const tgt=f.target?(standaloneTarget(f.target)?`${f.target} `:`по ${f.target} `):'';
+  return `${f.t1} - ${f.t2} ${pos}${strikePhrase(f)}${ammo}, ${tgt}в районі ${f.grid}\n`+
+    `Результат: ${f.result}\n`+
+    `Втрати противника: ${f.loss||'уточнюються'}`;
+}
+
+const normTime=s=>{
+  s=s.replace(/[.,]/g,':').trim();
+  if(!s.includes(':')&&/^\d{3,4}$/.test(s))s=s.slice(0,-2)+':'+s.slice(-2);
+  return s;
+};
+const looksLikeMgrs=g=>/^\d{1,2}\s?[A-Za-z]\s?[A-Za-z]{2}\s?\d{4,5}\s?\d{4,5}$/.test(g.trim());
+let pendingLosses=[];
+function addLoss(){
+  const v=document.getElementById('f-loss').value.trim();
+  if(!v){toast('Впиши втрату');return;}
+  if(/^уточн/i.test(v)){toast('«Уточнюються» додавати не треба');return;}
+  if(pendingLosses.some(x=>x.toLowerCase()===v.toLowerCase())){toast('Уже додано');return;}
+  pendingLosses.push(v);
+  document.getElementById('f-loss').value='';
+  renderLossChips();
+  toast('Додано: '+v);
+}
+function delLoss(i){pendingLosses.splice(i,1);renderLossChips();}
+function renderLossChips(){
+  const el=document.getElementById('loss-chips');
+  if(!el)return;
+  if(!pendingLosses.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="note" style="margin:0 0 4px">Втрати противника:</div>'+
+    pendingLosses.map((v,i)=>`<div class="item" style="padding:7px 10px;margin-bottom:5px">
+      <div class="nm" style="font-size:14px">${i+1}. ${esc(v)}</div>
+      <button class="del" onclick="delLoss(${i})">✕</button>
+    </div>`).join('');
+}
+function saveFlight(){
+  const date=document.getElementById('f-date').value||todayISO();
+  const t1=normTime(document.getElementById('f-t1').value.trim());
+  const t2=normTime(document.getElementById('f-t2').value.trim());
+  const droneId=document.getElementById('f-drone').value;
+  let lost=document.getElementById('f-lost').value==='1';
+  const ftypeVal=document.getElementById('f-type').value;
+  const noRet=ftypeVal==='bomber'?document.getElementById('f-noret').value.trim():'';
+  if(noRet)lost=true; // причина неповернення = борт втрачено
+  const ammoId=document.getElementById('f-ammo').value;
+  const aq=Math.max(0,parseInt(document.getElementById('f-aqty').value)||0);
+  const target=document.getElementById('f-target').value.trim();
+  const grid=document.getElementById('f-grid').value.trim();
+  const lossCur=document.getElementById('f-loss').value.trim();
+  let lossList=pendingLosses.slice();
+  if(lossCur&&!/^уточн/i.test(lossCur)&&!lossList.some(x=>x.toLowerCase()===lossCur.toLowerCase()))lossList.push(lossCur);
+  const loss=lossList.join(', ');
+  let res=document.getElementById('f-res').value;
+  if(res==='_c')res=document.getElementById('f-res-c').value.trim()||'—';
+  const rdist=document.getElementById('f-res-dist').value.trim();
+  if(rdist)res=res+' ('+rdist+')';
+  if(!t1||!t2){toast('Вкажи час зльоту і посадки');return;}
+  if(!droneId){toast('Обери дрон зі складу');return;}
+  const drone=S.drones.find(i=>i.id===droneId);
+  const ammo=ammoId?S.ammo.find(i=>i.id===ammoId):null;
+  if(!editId&&lost&&drone&&drone.qty===0){
+    if(!confirm(`«${drone.name}» — на складі 0 шт.\nСписати не буде з чого. Зберегти виліт як є?`))return;
+  }
+  if(!editId&&ammo&&aq>ammo.qty){
+    if(!confirm(`«${ammo.name}» — на складі ${ammo.qty}, а списується ${aq}.\nСпишеться лише ${ammo.qty}. Продовжити?`))return;
+  }
+  if(grid&&!looksLikeMgrs(grid)){
+    if(!confirm(`Квадрат «${grid}» виглядає незвично для MGRS (зразок: 37U CR 50156 68752).\nЗберегти як є?`))return;
+  }
+  // перевірка дати — щоб випадковий рік/місяць не сховав виліт зі звітів
+  {
+    const t=todayISO();
+    const diff=Math.round((new Date(date)-new Date(t))/864e5);
+    if(diff>1){
+      if(!confirm(`Дата вильоту ${fmtDate(date)} — у майбутньому (сьогодні ${fmtDate(t)}).\nЗберегти?`))return;
+    }else if(diff<-30){
+      if(!confirm(`Дата вильоту ${fmtDate(date)} — понад місяць тому.\nЗберегти?`))return;
+    }
+  }
+
+  if(editId){ // повертаємо старі списання
+    const old=S.flights.find(x=>x.id===editId);
+    if(old){restoreStock(old,"перерахунок при редагуванні");}
+  }
+  // списання — одним записом у лог на весь виліт
+  const wr=[];
+  if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);wr.push(`${drone.name} −1`);}
+  if(ammo&&aq>0){ammo.qty=Math.max(0,ammo.qty-aq);wr.push(`${ammo.name} −${aq}`);}
+  if(wr.length)logStock('списано (виліт)','flight',wr.join(' · '),0,`${fmtDate(date)} ${t1}–${t2}`);
+
+  const f={id:editId||uid(),date,t1,t2,unit:S.settings.unit,position:S.settings.position,
+    droneId,droneName:drone.name,lost,ftype:ftypeVal,noRet,zhdun:document.getElementById('f-zhdun').value==='1',
+    ammoId:ammo?ammo.id:'',ammoName:ammo?ammo.name:'',ammoQty:ammo?aq:0,
+    target,grid,result:res,loss,losses:lossList};
+  if(editId){const i=S.flights.findIndex(x=>x.id===editId);S.flights[i]=f;editId=null;
+    document.getElementById('f-cancel').style.display='none';toast('Виліт оновлено');}
+  else{
+    S.flights.push(f);toast('Виліт збережено, склад оновлено');
+    S.backupCounter=(S.backupCounter||0)+1;
+    if(typeof writeFileBackup==='function')writeFileBackup(false);
+    if(S.backupCounter%10===0)setTimeout(()=>{
+      if(confirm(`Збережено ${S.backupCounter} вильотів. Зробити резервну копію даних у файл? (рекомендується)`))exportData();
+    },600);
+  }
+  save();clearForm();renderFlights();fillSelects();
+}
+function restoreStock(f,why){
+  const rb=[];
+  if(f.lost){const d=S.drones.find(i=>i.id===f.droneId);
+    if(d){d.qty++;rb.push(`${d.name} +1`);}}
+  if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);
+    if(a){a.qty+=f.ammoQty;rb.push(`${a.name} +${f.ammoQty}`);}}
+  if(rb.length)logStock('повернуто на склад','flight',rb.join(' · '),0,why||'видалення вильоту');
+}
+function clearForm(){
+  ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist','f-noret'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('f-aqty').value=1;
+  document.getElementById('f-res').value='Влучання в ціль';
+  document.getElementById('f-res-c').style.display='none';
+  pendingLosses=[];renderLossChips();
+  updateFlyBtn();
+}
+function editFlight(id){
+  const f=S.flights.find(x=>x.id===id);if(!f)return;
+  editId=id;
+  document.getElementById('f-date').value=f.date;
+  document.getElementById('f-t1').value=f.t1;
+  document.getElementById('f-t2').value=f.t2;
+  fillSelects();
+  document.getElementById('f-drone').value=f.droneId;
+  document.getElementById('f-type').value=f.ftype||'fiber';
+  document.getElementById('f-zhdun').value=f.zhdun?'1':'0';
+  document.getElementById('f-noret-wrap').style.display=(f.ftype==='bomber')?'block':'none';
+  document.getElementById('f-noret').value=f.noRet||'';
+  document.getElementById('f-lost').value=f.lost?'1':'0';
+  document.getElementById('f-ammo').value=f.ammoId;
+  document.getElementById('f-aqty').value=f.ammoQty||0;
+  document.getElementById('f-target').value=f.target;
+  document.getElementById('f-grid').value=f.grid;
+  {const ll=(f.losses&&f.losses.length)?f.losses.slice():((f.loss||'').trim()&&!/^уточн/i.test(f.loss)?[f.loss.trim()]:[]);
+   const lastL=ll.pop()||'';
+   pendingLosses=ll;renderLossChips();
+   document.getElementById('f-loss').value=lastL;}
+  const sel=document.getElementById('f-res');
+  const rd=document.getElementById('f-res-dist');
+  const raw=f.result||'';
+  const m=raw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const base=m?m[1].trim():raw.trim();
+  const dist=m?m[2].trim():'';
+  if([...sel.options].some(o=>o.value===base)){sel.value=base;rd.value=dist;
+    document.getElementById('f-res-c').style.display='none';}
+  else if([...sel.options].some(o=>o.value===raw)){sel.value=raw;rd.value='';
+    document.getElementById('f-res-c').style.display='none';}
+  else{sel.value='_c';const c=document.getElementById('f-res-c');c.value=base;c.style.display='block';rd.value=dist;}
+  document.getElementById('f-cancel').style.display='block';
+  updateFlyBtn();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function cancelEdit(){editId=null;clearForm();document.getElementById('f-cancel').style.display='none';}
+function delFlight(id){
+  if(!confirm('Видалити виліт? Списані БК/дрон повернуться на склад.'))return;
+  const f=S.flights.find(x=>x.id===id);if(f)restoreStock(f);
+  S.flights=S.flights.filter(x=>x.id!==id);
+  if(editId===id)cancelEdit();
+  save();renderFlights();fillSelects();renderStock();
+}
+function copyText(t){
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(()=>toast('Скопійовано')).catch(()=>fallbackCopy(t));
+  }else fallbackCopy(t);
+}
+function fallbackCopy(t){
+  const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');toast('Скопійовано');}catch(e){toast('⚠ Не вдалося скопіювати');}
+  ta.remove();
+}
+function copyFlight(id){const f=S.flights.find(x=>x.id===id);if(f)copyText(flightText(f));}
+function dupFlight(id){
+  const f=S.flights.find(x=>x.id===id);if(!f)return;
+  editId=null;
+  document.getElementById('f-cancel').style.display='none';
+  document.getElementById('f-date').value=f.date;
+  document.getElementById('f-t1').value='';
+  document.getElementById('f-t2').value='';
+  fillSelects();
+  document.getElementById('f-drone').value=f.droneId||'';
+  document.getElementById('f-type').value=f.ftype||'fiber';
+  document.getElementById('f-zhdun').value=f.zhdun?'1':'0';
+  document.getElementById('f-noret-wrap').style.display=(f.ftype==='bomber')?'block':'none';
+  document.getElementById('f-noret').value='';
+  document.getElementById('f-lost').value=f.lost?'1':'0';
+  document.getElementById('f-ammo').value=f.ammoId||'';
+  document.getElementById('f-aqty').value=f.ammoQty||0;
+  document.getElementById('f-target').value=f.target||'';
+  document.getElementById('f-grid').value=f.grid||'';
+  document.getElementById('f-loss').value='';
+  pendingLosses=[];renderLossChips();
+  const dsel=document.getElementById('f-res'),drd=document.getElementById('f-res-dist');
+  const draw=f.result||'';const dm=draw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  const dbase=dm?dm[1].trim():draw.trim();
+  if([...dsel.options].some(o=>o.value===dbase)){dsel.value=dbase;
+    document.getElementById('f-res-c').style.display='none';}
+  else{dsel.value='_c';const c=document.getElementById('f-res-c');c.value=dbase;c.style.display='block';}
+  drd.value='';
+  updateFlyBtn();
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast('Дані підставлено — впиши час і збережи');
+}
+let dayCrewTimer=null;
+function crewFor(date){
+  return (S.dayCrew&&S.dayCrew[date])||S.settings.crew||'';
+}
+function saveDayCrew(){
+  const date=document.getElementById('f-date').value||todayISO();
+  if(!S.dayCrew)S.dayCrew={};
+  const v=document.getElementById('f-crew').value.trim();
+  if(v)S.dayCrew[date]=v;else delete S.dayCrew[date];
+  clearTimeout(dayCrewTimer);
+  dayCrewTimer=setTimeout(()=>save(),500);
+}
+function fillCrewOpts(){
+  const dl=document.getElementById('crew-opts');
+  if(!dl)return;
+  const set=new Set();
+  if(S.settings.crew)set.add(S.settings.crew);
+  Object.values(S.dayCrew||{}).forEach(c=>{if(c)set.add(c);});
+  dl.innerHTML=[...set].map(c=>`<option value="${esc(c)}"></option>`).join('');
+}
+function fillHistoryOpts(){
+  const gd=document.getElementById('grid-opts');
+  if(gd){
+    const cnt={};
+    S.flights.forEach(f=>{if(f.grid)cnt[f.grid]=(cnt[f.grid]||0)+1;});
+    gd.innerHTML=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,40)
+      .map(([g])=>`<option value="${esc(g)}"></option>`).join('');
+  }
+  const td=document.getElementById('target-opts');
+  if(td){
+    const base=['живій силі противника','техніці противника','позиції противника','розвідка','засідка','чергування','спостереження','супровід'];
+    const set=new Set(base);
+    S.flights.forEach(f=>{if(f.target)set.add(f.target);});
+    td.innerHTML=[...set].map(t=>`<option value="${esc(t)}"></option>`).join('');
+  }
+  // свої результати, використані 2+ рази → у список вибору
+  const sel=document.getElementById('f-res');
+  if(sel){
+    sel.querySelectorAll('option[data-dyn]').forEach(o=>o.remove());
+    const known=new Set([...sel.options].map(o=>o.value));
+    const cnt={};
+    S.flights.forEach(f=>{
+      const b=cap((f.result||'').split('(')[0].trim().toLowerCase());
+      if(b)cnt[b]=(cnt[b]||0)+1;
+    });
+    const other=sel.querySelector('option[value="_c"]');
+    Object.entries(cnt).filter(([b,c])=>c>=2&&!known.has(b))
+      .sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .forEach(([b])=>{
+        const o=document.createElement('option');
+        o.value=b;o.textContent=b;o.dataset.dyn='1';
+        sel.insertBefore(o,other);
+      });
+  }
+  // свої варіанти втрат, використані 2+ рази → у підказки
+  const ld=document.getElementById('loss-opts');
+  if(ld){
+    ld.querySelectorAll('option[data-dyn]').forEach(o=>o.remove());
+    const known=new Set([...ld.options].map(o=>o.value));
+    const cnt={};
+    S.flights.forEach(f=>{
+      const v=(f.loss||'').trim();
+      if(v&&!/^уточн/i.test(v))cnt[v]=(cnt[v]||0)+1;
+    });
+    Object.entries(cnt).filter(([v,c])=>c>=2&&!known.has(v))
+      .sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .forEach(([v])=>{
+        const o=document.createElement('option');
+        o.value=v;o.dataset.dyn='1';
+        ld.appendChild(o);
+      });
+  }
+}
+let dayNotesTimer=null;
+function saveDayNotes(){
+  const date=document.getElementById('f-date').value||todayISO();
+  if(!S.dayNotes)S.dayNotes={};
+  S.dayNotes[date]=document.getElementById('day-notes').value;
+  clearTimeout(dayNotesTimer);
+  dayNotesTimer=setTimeout(()=>save(),500);
+}
+function renderFlights(){
+  const date=document.getElementById('f-date').value||todayISO();
+  document.getElementById('fly-day-label').textContent=fmtDate(date);
+  const dn=document.getElementById('day-notes');
+  if(dn&&document.activeElement!==dn)dn.value=(S.dayNotes&&S.dayNotes[date])||'';
+  const fc=document.getElementById('f-crew');
+  if(fc&&document.activeElement!==fc)fc.value=crewFor(date);
+  fillCrewOpts();
+  fillHistoryOpts();
+  const q=(document.getElementById('fly-search')?.value||'').trim().toLowerCase();
+  let arr, header;
+  if(q){
+    arr=S.flights.filter(f=>{
+      const hay=[f.droneName,f.target,f.grid,f.result,f.ammoName,f.loss,fmtDate(f.date)].join(' ').toLowerCase();
+      return hay.includes(q);
+    }).sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}));
+    document.getElementById('fly-day-label').textContent=`пошук: ${arr.length}`;
+  }else{
+    arr=S.flights.filter(f=>f.date===date).sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  }
+  // короткий підсумок дня
+  const ds=document.getElementById('day-summary');
+  if(ds){
+    const day=S.flights.filter(f=>f.date===date);
+    if(day.length){
+      const h=day.filter(f=>/влуч|ураж/i.test(f.result)).length;
+      const bk=day.reduce((s,f)=>s+(f.ammoQty||0),0);
+      const ld=day.filter(f=>f.lost).length;
+      ds.innerHTML=`<b style="color:var(--accent)">${fmtDate(date)}:</b> вильотів ${day.length} · влучань ${h} · БК ${bk} · дронів списано ${ld}`;
+    }else ds.innerHTML='';
+  }
+  const el=document.getElementById('fly-list');
+  if(!arr.length){el.innerHTML='<div class="empty">'+(q?'Нічого не знайдено':'Вильотів за цю дату немає')+'</div>';return;}
+  el.innerHTML=arr.map(f=>`<div class="fl">
+    <div class="hd"><span class="tm">${q?esc(fmtDate(f.date))+' ':''}${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName)}</span></div>
+    <div class="txt">${esc(flightText(f))}</div>
+    <div class="acts">
+      <button onclick="copyFlight('${f.id}')">📋 Копіювати</button>
+      <button onclick="dupFlight('${f.id}')">⧉ Дублювати</button>
+      <button onclick="editFlight('${f.id}')">✎ Редагувати</button>
+      <button onclick="delFlight('${f.id}')" style="color:var(--red)">✕</button>
+    </div>
+  </div>`).join('');
+}
+
+/* ===== daily report ===== */
+document.getElementById('r-date').addEventListener('change',renderReport);
+document.getElementById('r-losses').addEventListener('input',()=>{
+  const date=document.getElementById('r-date').value||todayISO();
+  if(!S.losses)S.losses={};
+  S.losses[date]=document.getElementById('r-losses').value.trim();
+  save();
+  const ta=document.getElementById('r-text');
+  if(ta){const t=buildReport(date);if(t){ta.value=t;ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';}}
+});
+function buildStockReport(date,noHeader){
+  const bySort=a=>a.slice().sort((x,y)=>y.qty-x.qty||x.name.localeCompare(y.name,'uk'));
+  const u=i=>(i.unit||'шт')+'.';
+  let lines=[];
+  if(!noHeader){
+    lines.push(fmtDate(date));
+    if(S.settings.unit)lines.push(S.settings.unit);
+    if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+    const crew807=crewFor(date);if(crew807)lines.push("Екіпаж: "+crew807);
+    lines.push('');
+  }
+  lines.push('НАЯВНІСТЬ БК:');
+  lines.push('');
+  const ammo=bySort(S.ammo.filter(i=>i.qty>0));
+  if(ammo.length)ammo.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
+  else lines.push('•—');
+  lines.push('');
+  lines.push('ДРОНИ ОПТОВОЛОКНО:');
+  const dr=bySort(S.drones.filter(i=>i.qty>0));
+  if(dr.length)dr.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
+  else lines.push('•—');
+  const nbg=bySort((S.nbg||[]).filter(i=>i.qty>0));
+  if(nbg.length){
+    lines.push('');
+    lines.push('НЕ БГ:');
+    nbg.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
+  }
+  lines.push('');
+  lines.push('───');
+  lines.push('');
+  lines.push('ОБЛАДНАННЯ:');
+  lines.push('');
+  const gr=bySort(S.gear.filter(i=>i.qty>0));
+  if(gr.length)gr.forEach(i=>{
+    if(i.sn)lines.push(`•${i.name} s/n: ${i.sn}`+(i.qty>1?` - ${i.qty} ${u(i)}`:''));
+    else lines.push(`•${i.name} - ${i.qty} ${u(i)}`);
+  });
+  else lines.push('•—');
+  return lines.join('\n');
+}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+// розбір запису втрат: "2х300, знищено укриття" → {200:0,300:2,other:['знищено укриття']}
+function parseLoss(s){
+  const out={200:0,300:0,other:[]};
+  String(s||'').split(/[,;]+/).map(x=>x.trim()).filter(Boolean).forEach(p=>{
+    const m=p.match(/^(\d+)?\s*[xх*\-–]?\s*(200|300)\s*$/i);
+    if(m){out[m[2]]+=m[1]?parseInt(m[1]):1;return;}
+    out.other.push(p);
+  });
+  return out;
+}
+// ключі втрат вильоту: ['Жива сила х300','Знищено укриття']
+function lossKeys(f){
+  const raw=(f.loss||'').trim();
+  if(!raw||/^уточн/i.test(raw))return[];
+  const p=parseLoss(raw);const out=[];
+  if(p[200])out.push('Жива сила х200');
+  if(p[300])out.push('Жива сила х300');
+  p.other.forEach(o=>out.push(cap(o.toLowerCase())));
+  return [...new Set(out)];
+}
+const cutHour=()=>S.settings.cutHour??18;
+const flMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
+function buildReport(date,part){
+  const cut=cutHour()*60;
+  let arr=S.flights.filter(f=>f.date===date);
+  if(part==='before')arr=arr.filter(f=>{const m=flMin(f.t1);return m===null||m<cut;});
+  else if(part==='after')arr=arr.filter(f=>{const m=flMin(f.t1);return m!==null&&m>=cut;});
+  arr=arr.sort((a,b)=>a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  const cutStr=String(cutHour()).padStart(2,'0')+':00';
+  let lines=[];
+  lines.push('Звіт '+fmtDate(date)+(part==='before'?` (до ${cutStr})`:part==='after'?` (після ${cutStr})`:''));
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  const crew846=crewFor(date);if(crew846)lines.push("Екіпаж: "+crew846);
+  lines.push('');
+  if(!arr.length){
+    lines.push('Вильотів не було.');
+    return lines.join('\n');
+  }
+  arr.forEach((f,i)=>{
+    lines.push((i+1)+'. '+flightText(f));
+    lines.push('');
+  });
+  lines.push('Всього вильотів: '+arr.length);
+  lines.push('');
+  lines.push('ВИТРАТА БК:');
+  lines.push('');
+  const ammoUse={};
+  arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+  const au=Object.entries(ammoUse);
+  if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
+  else lines.push('• —');
+  lines.push('');
+  lines.push('ВИТРАТИ МАЙНА:');
+  lines.push('');
+  const droneUse={};
+  arr.forEach(f=>{if(f.lost)droneUse[f.droneName]=(droneUse[f.droneName]||0)+1;});
+  const du=Object.entries(droneUse);
+  if(du.length)du.forEach(([n,q])=>lines.push(`• ${n} - ${q} шт.`));
+  else lines.push('• —');
+  lines.push('');
+  lines.push('ВТРАТИ ВОРОГА:');
+  const manual=(S.losses&&S.losses[date])||'';
+  let loss;
+  if(manual)loss=manual;
+  else{
+    const fl=arr.map((f,i)=>({n:i+1,t:(f.loss||'').trim()})).filter(x=>x.t&&!/^уточн/i.test(x.t));
+    if(!fl.length)loss='Уточнюються';
+    else if(fl.length===1)loss=cap(fl[0].t);
+    else loss=fl.map(x=>`п.${x.n} — ${x.t}`).join('; ');
+  }
+  lines.push(loss);
+  return lines.join('\n');
+}
+let rMode='flights';
+document.getElementById('r-seg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;rMode=b.dataset.m;
+  document.querySelectorAll('#r-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('r-loss-wrap').style.display=(rMode==='stock'||rMode==='deliv')?'none':'block';
+  renderReport();
+});
+function renderReport(){
+  const date=document.getElementById('r-date').value||todayISO();
+  document.getElementById('r-date').value=date;
+  document.getElementById('r-losses').value=(S.losses&&S.losses[date])||'';
+  let t;
+  if(rMode==='stock')t=buildStockReport(date);
+  else if(rMode==='deliv')t=buildDelivReport(date);
+  else if(rMode==='before'||rMode==='after')t=buildReport(date,rMode);
+  else t=buildReport(date);
+  const el=document.getElementById('r-out');
+  if(!t){el.innerHTML='<div class="empty">За '+fmtDate(date)+' вильотів немає</div>';return;}
+  el.innerHTML=`<textarea class="report" id="r-text" style="width:100%;min-height:120px"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('r-text').value)">📋 Скопіювати звіт</button>
+    <button class="btn sec" onclick="shareReport()">↗ Поділитися (месенджер)</button>
+    <button class="btn sec" onclick="saveReportFile()">⬇ Зберегти як файл</button>
+    <p class="note">${rMode==='stock'
+      ?'Наявність береться з поточних залишків складу. Текст можна правити перед відправкою.'
+      :(rMode==='before'||rMode==='after')
+      ?'Тільки вильоти за цей проміжок. Наявність — окремим звітом.'
+      :'Текст можна правити прямо тут перед відправкою. Постійні зміни — через редагування вильоту у вкладці «Вильоти».'}</p>`;
+  const ta=document.getElementById('r-text');
+  ta.value=t;
+  const fit=()=>{ta.style.height='auto';ta.style.height=(ta.scrollHeight+4)+'px';};
+  ta.addEventListener('input',fit);fit();
+}
+function saveReportFile(){
+  const t=document.getElementById('r-text').value;
+  const date=document.getElementById('r-date').value||todayISO();
+  const blob=new Blob(['\uFEFF'+t],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='zvit-'+date+'.txt';a.click();
+  toast('Файл збережено');
+}
+function shareReport(){
+  const t=document.getElementById('r-text').value;
+  // месенджери обрізають довгий текст при передачі через «Поділитися»
+  if(t.length>800){
+    if(confirm(`Звіт довгий (${t.length} симв.).\n\nМесенджери часто обрізають такі тексти при «Поділитися».\n\nСкопіювати в буфер і вставити вручну? (надійно)`)){
+      copyText(t);return;
+    }
+  }
+  if(navigator.share)navigator.share({text:t}).catch(()=>{});
+  else copyText(t);
+}
+
+/* ===== stats ===== */
+let statDays=7;
+document.getElementById('stats-seg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  statDays=b.dataset.d==='custom'?'custom':+b.dataset.d;
+  document.querySelectorAll('#stats-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  const rng=document.getElementById('stats-range');
+  if(statDays==='custom'){
+    rng.style.display='block';
+    // за замовчуванням — останні 14 днів
+    const f=document.getElementById('st-from'),t=document.getElementById('st-to');
+    if(!f.value||!t.value){
+      const today=todayISO();const d=new Date(today);d.setDate(d.getDate()-13);
+      f.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      t.value=today;
+    }
+  }else rng.style.display='none';
+  renderStats();
+});
+let openGroups={res:null,drone:null,ammo:null,loss:null};
+let groupKeys={res:[],drone:[],ammo:[],loss:[]};
+function toggleGroup(section,idx){
+  const k=groupKeys[section][idx];
+  if(k===undefined)return;
+  openGroups[section]=(openGroups[section]===k)?null:k;
+  renderStats();
+}
+// entries: [ключ, {fl:[вильоти], right:'HTML праворуч', sub:'дрібний підпис'}]
+function renderGroups(elId,section,entries){
+  groupKeys[section]=entries.map(e=>e[0]);
+  const el=document.getElementById(elId);
+  if(!entries.length){el.innerHTML='<div class="empty">Немає даних</div>';return;}
+  el.innerHTML=entries.map(([k,o],idx)=>{
+    const open=openGroups[section]===k;
+    return `<div class="item" onclick="toggleGroup('${section}',${idx})" style="cursor:pointer">
+      <div class="nm">${esc(k)}${o.sub?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${esc(o.sub)}</div>`:''}</div>
+      <div class="qty" style="min-width:auto">${o.right}</div>
+      <div style="color:var(--muted);font-size:13px;width:18px;text-align:center">${open?'▲':'▼'}</div>
+    </div>
+    ${open?`<div style="margin:-4px 0 10px 10px;padding-left:10px;border-left:2px solid var(--line)">${
+      o.fl.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}))
+      .map(f=>`<div class="fl" style="margin-bottom:6px">
+        <div class="hd"><span class="tm">${esc(fmtDate(f.date))} ${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName||'—')}</span></div>
+        <div class="txt" style="font-size:13px">${esc(flightText(f))}</div>
+      </div>`).join('')}</div>`:''}`;
+  }).join('');
+}
+function clearStatsFilter(){
+  ['flt-drone','flt-ammo','flt-res','flt-loss'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderStats();
+}
+function fillStatsFilters(pool){
+  const mk=(id,vals,label)=>{
+    const el=document.getElementById(id);if(!el)return;
+    const cur=el.value;
+    el.innerHTML=`<option value="">— всі ${label} —</option>`+
+      vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(vals.includes(cur))el.value=cur;else el.value='';
+  };
+  const drones=[...new Set(pool.map(f=>f.droneName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const ammos=[...new Set(pool.map(f=>f.ammoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const ress=[...new Set(pool.map(f=>cap((f.result||'').split('(')[0].trim().toLowerCase())).filter(Boolean))]
+    .sort((a,b)=>a.localeCompare(b,'uk'));
+  mk('flt-drone',drones,'дрони');
+  mk('flt-ammo',ammos,'БК');
+  mk('flt-res',ress,'результати');
+  const losses=[...new Set(pool.flatMap(f=>lossKeys(f)))].sort((a,b)=>a.localeCompare(b,'uk'));
+  mk('flt-loss',losses,'втрати');
+}
+function renderStats(){
+  let pool, periodLabel='';
+  if(statDays==='custom'){
+    const fv=document.getElementById('st-from')?.value||'';
+    const tv=document.getElementById('st-to')?.value||'';
+    const lo=fv&&tv?(fv<=tv?fv:tv):fv||tv;
+    const hi=fv&&tv?(fv<=tv?tv:fv):fv||tv;
+    if(!lo||!hi){pool=S.flights.slice();}
+    else{pool=S.flights.filter(f=>f.date>=lo&&f.date<=hi);periodLabel=`${fmtDate(lo)} – ${fmtDate(hi)}`;}
+  }else{
+    const now=new Date(todayISO());
+    const from=statDays?new Date(now.getTime()-(statDays-1)*864e5):null;
+    const inRange=f=>{if(!from)return true;const d=new Date(f.date);return d>=from&&d<=now;};
+    pool=S.flights.filter(inRange);
+  }
+  fillStatsFilters(pool);
+  const fD=document.getElementById('flt-drone')?.value||'';
+  const fA=document.getElementById('flt-ammo')?.value||'';
+  const fR=document.getElementById('flt-res')?.value||'';
+  const fL=document.getElementById('flt-loss')?.value||'';
+  const arr=pool.filter(f=>
+    (!fD||f.droneName===fD)&&
+    (!fA||f.ammoName===fA)&&
+    (!fR||cap((f.result||'').split('(')[0].trim().toLowerCase())===fR)&&
+    (!fL||lossKeys(f).includes(fL)));
+  const info=document.getElementById('flt-info');
+  if(info){
+    const act=[fD,fA,fR,fL].filter(Boolean);
+    const perStr=periodLabel?`Період: ${periodLabel} — ${pool.length} вильотів`:'';
+    info.innerHTML=act.length
+      ?(periodLabel?perStr+'<br>':'')+`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
+      :perStr;
+  }
+  const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
+  const lost=arr.filter(f=>f.lost).length;
+  const ammoTotal=arr.reduce((s,f)=>s+(f.ammoQty||0),0);
+  const filtered=arr.length!==pool.length;
+  const shareStr=filtered&&pool.length?` · ${Math.round(arr.length/pool.length*100)}% від ${pool.length}`:'';
+  // тривалість польотів
+  const toMin=t=>{const m=(t||'').match(/^(\d{1,2}):(\d{2})$/);return m?+m[1]*60+ +m[2]:null;};
+  const durs=[],zdurs=[];
+  arr.forEach(f=>{
+    const a=toMin(f.t1),b=toMin(f.t2);
+    if(a===null||b===null)return;
+    let d=b-a;if(d<0)d+=1440;
+    if(d<=0)return;
+    if(f.zhdun){zdurs.push({d,f});return;}   // ждуни рахуємо окремо
+    if(d<=180)durs.push({d,f});
+  });
+  const hm=m=>Math.floor(m/60)+' год '+String(m%60).padStart(2,'0')+' хв';
+  const totMin=durs.reduce((s,x)=>s+x.d,0);
+  const avgMin=durs.length?Math.round(totMin/durs.length):0;
+  const totStr=totMin?hm(totMin):'—';
+  const zTot=zdurs.reduce((s,x)=>s+x.d,0);
+  const hitDurs=durs.filter(x=>/влуч|ураж/i.test(x.f.result)).map(x=>x.d);
+  const lossDurs=durs.filter(x=>/обрив|втрата керування|реб/i.test(x.f.result)).map(x=>x.d);
+  const avg=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
+  const ah=avg(hitDurs),al=avg(lossDurs);
+  document.getElementById('stats-cards').innerHTML=`
+    <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів${shareStr}</div></div>
+    <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})</div></div>
+    <div class="stat"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
+    <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>
+    <div class="stat"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ${zdurs.length?' (без ждунів)':''}</div></div>
+    <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт${zdurs.length?' (без ждунів)':''}</div></div>`+
+    (zdurs.length?`
+    <div class="stat"><div class="v">${zdurs.length}</div><div class="l">вильотів ждуном</div></div>
+    <div class="stat"><div class="v" style="font-size:20px">${hm(zTot)}</div><div class="l">час ждуном на позиції</div></div>`:'');
+  const durNote=document.getElementById('dur-note');
+  if(durNote){
+    const p1=(ah!==null&&al!==null)?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`:'';
+    const p2=zdurs.length?`Ждуни (${zdurs.length}) не входять у наліт — час очікування рахується окремо.`:'';
+    durNote.innerHTML=[p1,p2].filter(Boolean).join('<br>');
+  }
+  // chart
+  let days;
+  if(statDays==='custom'){
+    const fv=document.getElementById('st-from')?.value||'';
+    const tv=document.getElementById('st-to')?.value||'';
+    if(fv&&tv){
+      const lo=fv<=tv?fv:tv,hi=fv<=tv?tv:fv;
+      days=Math.min(90,Math.max(1,Math.round((new Date(hi)-new Date(lo))/864e5)+1));
+    }else days=Math.min(60,daysSpan(arr));
+  }else days=statDays||Math.min(60,daysSpan(arr));
+  drawChart(arr,days,statDays==='custom'?(document.getElementById('st-to')?.value||todayISO()):todayISO());
+  drawWeeksChart(arr);
+  drawHoursChart(arr);
+  // групування результатів: "Обрив(5 км)" і "Обрив( 13 км)" → "Обрив" з підписом дистанцій
+  const byRes={};
+  arr.forEach(f=>{
+    const raw=(f.result||'—').trim();
+    const base=cap(raw.split('(')[0].trim().toLowerCase())||'—';
+    const m=raw.match(/\(([^)]*)\)/);
+    if(!byRes[base])byRes[base]={n:0,det:[],fl:[]};
+    byRes[base].n++;
+    byRes[base].fl.push(f);
+    if(m&&m[1].trim())byRes[base].det.push(m[1].trim());
+  });
+  const resEntries=Object.entries(byRes).sort((a,b)=>b[1].n-a[1].n).map(([r,o])=>{
+    const dc={};o.det.forEach(d=>dc[d]=(dc[d]||0)+1);
+    const sub=Object.entries(dc).map(([d,c])=>c>1?`${d} ×${c}`:d).join(', ');
+    const pct=arr.length?Math.round(o.n/arr.length*100):0;
+    return [r,{fl:o.fl,right:`${o.n} <span style="color:var(--muted);font-size:13px">(${pct}%)</span>`,sub}];
+  });
+  renderGroups('stats-res','res',resEntries);
+
+  // === Втрати противника ===
+  let l200=0,l300=0,withLoss=0;
+  const byLoss={};
+  arr.forEach(f=>{
+    const raw=(f.loss||'').trim();
+    if(!raw||/^уточн/i.test(raw))return;
+    withLoss++;
+    const p=parseLoss(raw);
+    l200+=p[200];l300+=p[300];
+    // кожна складова окремим рядком
+    const parts=[];
+    if(p[200])parts.push(`${p[200]}х200`);
+    if(p[300])parts.push(`${p[300]}х300`);
+    p.other.forEach(o=>parts.push(cap(o.toLowerCase())));
+    parts.forEach(k=>{
+      const key=/^\d+х(200|300)$/.test(k)?('Жива сила '+k.replace(/^\d+/,'')):k;
+      if(!byLoss[key])byLoss[key]={n:0,fl:[],qty:0};
+      byLoss[key].n++;
+      const mq=k.match(/^(\d+)х/);
+      byLoss[key].qty+=mq?parseInt(mq[1]):1;
+      if(!byLoss[key].fl.includes(f))byLoss[key].fl.push(f);
+    });
+  });
+  const lc=document.getElementById('loss-cards');
+  if(lc)lc.innerHTML=`
+    <div class="stat"><div class="v">${l200}</div><div class="l">200 (безповоротні)</div></div>
+    <div class="stat"><div class="v">${l300}</div><div class="l">300 (санітарні)</div></div>
+    <div class="stat"><div class="v">${withLoss}</div><div class="l">вильотів з втратами${arr.length?' · '+Math.round(withLoss/arr.length*100)+'%':''}</div></div>
+    <div class="stat"><div class="v">${l200+l300}</div><div class="l">разом особового складу</div></div>`;
+  renderGroups('stats-losses','loss',
+    Object.entries(byLoss).sort((a,b)=>b[1].qty-a[1].qty).map(([k,o])=>{
+      const isPer=/^Жива сила/.test(k);
+      const nf=o.fl.length;
+      const pct=arr.length?Math.round(nf/arr.length*100):0;
+      const right=isPer
+        ?`${o.qty} <span style="color:var(--muted);font-size:13px">ос.</span>`
+        :String(o.qty);
+      return [k,{fl:o.fl,right,sub:`у ${nf} ${nf===1?'вильоті':'вильотах'} — ${pct}% від усіх`}];
+    }));
+  const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+  document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
+    Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
+    :'<div class="empty">Немає даних</div>';
+  const dUse={};arr.forEach(f=>{if(f.lost)dUse[f.droneName]=(dUse[f.droneName]||0)+1;});
+  document.getElementById('stats-drones').innerHTML=Object.keys(dUse).length?
+    Object.entries(dUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
+    :'<div class="empty">Немає даних</div>';
+
+  // Наліт по дронах: вильотів + влучань
+  const dStat={};
+  arr.forEach(f=>{
+    const n=f.droneName||'—';
+    if(!dStat[n])dStat[n]={fl:0,hit:0,list:[]};
+    dStat[n].fl++;dStat[n].list.push(f);
+    if(/влуч|ураж/i.test(f.result))dStat[n].hit++;
+  });
+  renderGroups('stats-topdrone','drone',
+    Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl).map(([n,s])=>{
+      const pct=s.fl?Math.round(s.hit/s.fl*100):0;
+      const shr=arr.length?Math.round(s.fl/arr.length*100):0;
+      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}% влуч · ${shr}% нальоту)</span>`,sub:''}];
+    }));
+
+  // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
+  const aStat={};
+  arr.forEach(f=>{
+    if(!f.ammoName)return;
+    if(!aStat[f.ammoName])aStat[f.ammoName]={fl:0,hit:0,list:[]};
+    aStat[f.ammoName].fl++;aStat[f.ammoName].list.push(f);
+    if(/влуч|ураж/i.test(f.result))aStat[f.ammoName].hit++;
+  });
+  renderGroups('stats-ammoeff','ammo',
+    Object.entries(aStat).sort((a,b)=>(b[1].hit/b[1].fl)-(a[1].hit/a[1].fl)).map(([n,s])=>{
+      const pct=s.fl?Math.round(s.hit/s.fl*100):0;
+      return [cap(n),{fl:s.list,right:`${pct}% <span style="color:var(--muted);font-size:13px">(${s.hit}/${s.fl})</span>`,sub:''}];
+    }));
+}
+function daysSpan(arr){
+  if(!arr.length)return 7;
+  const min=arr.reduce((m,f)=>f.date<m?f.date:m,arr[0].date);
+  return Math.max(7,Math.round((new Date(todayISO())-new Date(min))/864e5)+1);
+}
+function drawChart(arr,days,endISO){
+  const cv=document.getElementById('chart');
+  const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+  const now=new Date(endISO||todayISO());
+  const counts=[],labels=[];
+  for(let i=days-1;i>=0;i--){
+    const d=new Date(now.getTime()-i*864e5);
+    const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    counts.push(arr.filter(f=>f.date===iso).length);
+    labels.push(String(d.getDate()).padStart(2,'0'));
+  }
+  const max=Math.max(1,...counts);
+  const pad=8*devicePixelRatio,bw=(W-pad*2)/counts.length;
+  const topPad=16*devicePixelRatio;
+  ctx.fillStyle='#8b94a0';ctx.font=(10*devicePixelRatio)+'px monospace';ctx.textAlign='center';
+  counts.forEach((c,i)=>{
+    const h=(H-30*devicePixelRatio-topPad)*(c/max);
+    const x=pad+i*bw;
+    ctx.fillStyle=c?'#b6c46a':'#2a323d';
+    ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-h,bw*.7,Math.max(h,2*devicePixelRatio));
+    if(days<=31){ctx.fillStyle='#8b94a0';ctx.fillText(labels[i],x+bw/2,H-6*devicePixelRatio);}
+    if(c){ctx.fillStyle='#d9dfe6';ctx.fillText(c,x+bw/2,H-26*devicePixelRatio-h);}
+  });
+}
+
+/* ===== period export / stock log / theme ===== */
+function exportPeriod(){
+  const from=document.getElementById('exp-from').value;
+  const to=document.getElementById('exp-to').value;
+  if(!from||!to){toast('Вкажи обидві дати');return;}
+  const lo=from<=to?from:to, hi=from<=to?to:from;
+  const dates=[...new Set(S.flights.filter(f=>f.date>=lo&&f.date<=hi).map(f=>f.date))].sort();
+  const out=document.getElementById('exp-out');
+  if(!dates.length){out.innerHTML='<div class="empty">За період вильотів немає</div>';return;}
+  const parts=dates.map(d=>buildReport(d)).filter(Boolean);
+  const text=parts.join('\n\n══════════════════\n\n');
+  out.innerHTML=`<textarea class="report" style="width:100%;min-height:160px" id="exp-text"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('exp-text').value)">📋 Скопіювати все (${dates.length} дн.)</button>`;
+  document.getElementById('exp-text').value=text;
+}
+function exportSummary(){
+  const from=document.getElementById('exp-from').value;
+  const to=document.getElementById('exp-to').value;
+  if(!from||!to){toast('Вкажи обидві дати');return;}
+  const lo=from<=to?from:to,hi=from<=to?to:from;
+  const arr=S.flights.filter(f=>f.date>=lo&&f.date<=hi)
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  const out=document.getElementById('exp-out');
+  let lines=[];
+  lines.push(`Зведення за ${fmtDate(lo)} – ${fmtDate(hi)}`);
+  if(S.settings.unit)lines.push(S.settings.unit);
+  if(S.settings.position)lines.push('Позиція: '+S.settings.position);
+  lines.push('');
+  if(!arr.length){
+    lines.push('Вильотів не було.');
+  }else{
+    const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
+    const days=new Set(arr.map(f=>f.date)).size;
+    lines.push(`Всього вильотів: ${arr.length} (за ${days} дн.)`);
+    lines.push(`Влучань: ${hit} (${Math.round(hit/arr.length*100)}%)`);
+    lines.push('');
+    lines.push('ВИТРАТА БК:');
+    const ammoUse={};
+    arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+    const au=Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]);
+    if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
+    else lines.push('• —');
+    lines.push('');
+    lines.push('ВИТРАТИ МАЙНА:');
+    const droneUse={};
+    arr.forEach(f=>{if(f.lost)droneUse[f.droneName]=(droneUse[f.droneName]||0)+1;});
+    const du=Object.entries(droneUse).sort((a,b)=>b[1]-a[1]);
+    if(du.length)du.forEach(([n,q])=>lines.push(`• ${n} - ${q} шт.`));
+    else lines.push('• —');
+    lines.push('');
+    lines.push('ВТРАТИ ВОРОГА:');
+    const losses=[];
+    const seenDates=new Set();
+    arr.forEach(f=>{
+      const v=(f.loss||'').trim();
+      if(v&&!/^уточн/i.test(v))losses.push(`• ${fmtDate(f.date)}: ${v}`);
+      seenDates.add(f.date);
+    });
+    seenDates.forEach(d=>{
+      const m=(S.losses&&S.losses[d]||'').trim();
+      if(m&&!/^уточн/i.test(m))losses.push(`• ${fmtDate(d)}: ${m}`);
+    });
+    if(losses.length)losses.sort().forEach(l=>lines.push(l));
+    else lines.push('Уточнюються');
+  }
+  const text=lines.join('\n');
+  out.innerHTML=`<textarea class="report" style="width:100%;min-height:160px" id="exp-text"></textarea>
+    <button class="btn" onclick="copyText(document.getElementById('exp-text').value)">📋 Скопіювати зведення</button>`;
+  document.getElementById('exp-text').value=text;
+}
+function toggleStockLog(){
+  const el=document.getElementById('stock-log-wrap');
+  if(el.style.display==='none'){el.style.display='block';renderStockLog();}
+  else el.style.display='none';
+}
+function renderStockLog(){
+  const el=document.getElementById('stock-log');
+  const fd=document.getElementById('log-date')?.value||'';
+  let log=S.stockLog||[];
+  if(fd){
+    const[y,m,d]=fd.split('-').map(Number);
+    const from=new Date(y,m-1,d).getTime(), to=from+864e5;
+    log=log.filter(e=>e.ts>=from&&e.ts<to);
+  }
+  if(!log.length){el.innerHTML='<div class="empty">'+(fd?'За '+fmtDate(fd)+' рухів не було':'Лог порожній')+'</div>';return;}
+  const kindName={ammo:'БК',drones:'Дрон',gear:'Майно',nbg:'Не БГ',flight:'Виліт'};
+  el.innerHTML=log.slice(0,100).map(e=>{
+    const dt=new Date(e.ts);
+    const ds=String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+' '+
+      String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0');
+    const sign=e.delta>0?'+'+e.delta:e.delta<0?String(e.delta):'';
+    const col=e.delta>0?'var(--green)':e.delta<0?'var(--red)':'var(--muted)';
+    return `<div class="item"><div class="nm" style="font-size:14px">
+      <span style="color:var(--muted);font-family:var(--mono);font-size:12px">${ds}</span> · ${esc(e.action)}<br>
+      ${kindName[e.kind]||e.kind}: ${esc(e.name)}${e.note?' <span style="color:var(--muted);font-size:12px">('+esc(e.note)+')</span>':''}
+    </div><div class="qty" style="color:${col}">${sign}</div></div>`;
+  }).join('');
+}
+function applyTheme(){
+  const light=S.settings.theme==='light';
+  document.documentElement.classList.toggle('light',light);
+}
+function toggleTheme(){
+  S.settings.theme=S.settings.theme==='light'?'dark':'light';
+  save();applyTheme();
+  document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'🌙 Темна тема':'☀ Світла тема';
+}
+
+function drawWeeksChart(arr){
+  const cv=document.getElementById('chart-weeks');
+  if(!cv)return;
+  const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+  const note=document.getElementById('weeks-note');
+  // групуємо по тижнях (понеділок — початок)
+  const wk={};
+  arr.forEach(f=>{
+    const d=new Date(f.date);
+    const day=(d.getDay()+6)%7; // пн=0
+    const mon=new Date(d.getTime()-day*864e5);
+    const key=mon.getFullYear()+'-'+String(mon.getMonth()+1).padStart(2,'0')+'-'+String(mon.getDate()).padStart(2,'0');
+    if(!wk[key])wk[key]={n:0,hit:0};
+    wk[key].n++;
+    if(/влуч|ураж/i.test(f.result))wk[key].hit++;
+  });
+  const keys=Object.keys(wk).sort();
+  if(keys.length<2){
+    if(note)note.textContent='Замало даних — динаміка зʼявиться, коли буде 2+ тижні вильотів.';
+    return;
+  }
+  if(note)note.textContent='Стовпець — % влучань за тиждень (від понеділка), число знизу — вильотів.';
+  const pad=8*devicePixelRatio,topPad=16*devicePixelRatio;
+  const bw=(W-pad*2)/keys.length;
+  ctx.font=(9.5*devicePixelRatio)+'px monospace';ctx.textAlign='center';
+  keys.forEach((k,i)=>{
+    const o=wk[k];
+    const pct=o.n?Math.round(o.hit/o.n*100):0;
+    const h=(H-42*devicePixelRatio-topPad)*(pct/100);
+    const x=pad+i*bw;
+    ctx.fillStyle=pct>=60?'#7fbf7a':pct>=35?'#b6c46a':'#d96b5a';
+    ctx.fillRect(x+bw*.18,H-32*devicePixelRatio-h,bw*.64,Math.max(h,2*devicePixelRatio));
+    ctx.fillStyle='#d9dfe6';
+    ctx.fillText(pct+'%',x+bw/2,H-36*devicePixelRatio-h);
+    ctx.fillStyle='#8b94a0';
+    const[y,m,d]=k.split('-');
+    ctx.fillText(d+'.'+m,x+bw/2,H-18*devicePixelRatio);
+    ctx.fillText(o.n,x+bw/2,H-6*devicePixelRatio);
+  });
+}
+function drawHoursChart(arr){
+  const cv=document.getElementById('chart-hours');
+  if(!cv)return;
+  const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
+  const hours=Array(24).fill(0),hits=Array(24).fill(0);
+  arr.forEach(f=>{
+    const h=parseInt((f.t1||'').split(':')[0]);
+    if(isNaN(h)||h<0||h>23)return;
+    hours[h]++;
+    if(/влуч|ураж/i.test(f.result))hits[h]++;
+  });
+  const max=Math.max(1,...hours);
+  const pad=8*devicePixelRatio,bw=(W-pad*2)/24;
+  const topPad=10*devicePixelRatio;
+  ctx.font=(9*devicePixelRatio)+'px monospace';ctx.textAlign='center';
+  for(let h=0;h<24;h++){
+    const x=pad+h*bw;
+    const bh=(H-30*devicePixelRatio-topPad)*(hours[h]/max);
+    const hh=(H-30*devicePixelRatio-topPad)*(hits[h]/max);
+    ctx.fillStyle=hours[h]?'#3a4224':'#2a323d';
+    ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-bh,bw*.7,Math.max(bh,2*devicePixelRatio));
+    if(hits[h]){ctx.fillStyle='#7fbf7a';ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-hh,bw*.7,hh);}
+    if(h%3===0){ctx.fillStyle='#8b94a0';ctx.fillText(h,x+bw/2,H-6*devicePixelRatio);}
+  }
+  const best=hours.indexOf(Math.max(...hours));
+  document.getElementById('hours-note').textContent=Math.max(...hours)?`Зелене — влучання. Найактивніша година: ${best}:00–${best}:59`:'';
+}
+function exportCSV(){
+  const from=document.getElementById('exp-from').value;
+  const to=document.getElementById('exp-to').value;
+  if(!from||!to){toast('Вкажи обидві дати');return;}
+  const lo=from<=to?from:to,hi=from<=to?to:from;
+  const arr=S.flights.filter(f=>f.date>=lo&&f.date<=hi)
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.t1.localeCompare(b.t1,undefined,{numeric:true}));
+  if(!arr.length){toast('За період вильотів немає');return;}
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const rows=[['Дата','Зліт','Посадка','Дрон','Списано','БК','К-сть БК','Ціль','Квадрат','Результат','Втрати ворога']];
+  arr.forEach(f=>rows.push([fmtDate(f.date),f.t1,f.t2,f.droneName,f.lost?'так':'ні',f.ammoName,f.ammoQty||0,f.target,f.grid,f.result,f.loss]));
+  const csv='\uFEFF'+rows.map(r=>r.map(q).join(';')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`vyloty-${lo}_${hi}.csv`;a.click();
+  toast('CSV збережено');
+}
+
+/* ===== auto file backup ===== */
+let backupDirHandle=null;
+// зберігання ручки папки в IndexedDB
+function bkDB(){
+  return new Promise(res=>{
+    const rq=indexedDB.open('fpv-backup',1);
+    rq.onupgradeneeded=e=>{const db=e.target.result;if(!db.objectStoreNames.contains('h'))db.createObjectStore('h');};
+    rq.onsuccess=e=>res(e.target.result);rq.onerror=()=>res(null);
+  });
+}
+function bkSaveHandle(h){bkDB().then(db=>{if(db)db.transaction('h','readwrite').objectStore('h').put(h,'dir');});}
+function bkLoadHandle(){
+  return new Promise(res=>bkDB().then(db=>{
+    if(!db)return res(null);
+    const t=db.transaction('h','readonly').objectStore('h').get('dir');
+    t.onsuccess=()=>res(t.result||null);t.onerror=()=>res(null);
+  }));
+}
+async function pickBackupFolder(){
+  if(!window.showDirectoryPicker){
+    document.getElementById('folder-info').textContent='Цей телефон/браузер не підтримує авто-папку. Бекап відкриватиме діалог збереження.';
+    S.settings.fileBackup='dialog';save();
+    toast('Автобекап через діалог увімкнено');
+    return;
+  }
+  try{
+    const h=await window.showDirectoryPicker({mode:'readwrite'});
+    backupDirHandle=h;bkSaveHandle(h);
+    S.settings.fileBackup='folder';save();
+    document.getElementById('folder-info').textContent='✓ Папку обрано. Бекап пишеться туди раз на день автоматично.';
+    toast('Папку підключено');
+    await writeFileBackup(true);
+  }catch(e){
+    document.getElementById('folder-info').textContent='Вибір папки скасовано.';
+  }
+}
+async function ensureDirPermission(){
+  if(!backupDirHandle)backupDirHandle=await bkLoadHandle();
+  if(!backupDirHandle)return false;
+  try{
+    const opts={mode:'readwrite'};
+    if(await backupDirHandle.queryPermission(opts)==='granted')return true;
+    if(await backupDirHandle.requestPermission(opts)==='granted')return true;
+  }catch(e){}
+  return false;
+}
+async function cleanOldBackups(keep){
+  if(!backupDirHandle)return;
+  try{
+    const files=[];
+    for await(const [name,h] of backupDirHandle.entries()){
+      if(h.kind==='file'&&/^zvit-fpv-backup-\d{4}-\d{2}-\d{2}\.json$/.test(name))files.push(name);
+    }
+    files.sort(); // назва містить дату → сортування = хронологія
+    while(files.length>keep){
+      const oldName=files.shift();
+      try{await backupDirHandle.removeEntry(oldName);}catch(e){}
+    }
+  }catch(e){}
+}
+async function writeFileBackup(force){
+  const mode=S.settings.fileBackup;
+  if(!mode)return;
+  const today=todayISO();
+  if(!force&&S.lastFileBackup===today)return; // раз на день
+  const json=JSON.stringify(S,null,1);
+  const fname='zvit-fpv-backup-'+today+'.json';
+  if(mode==='folder'){
+    if(!(await ensureDirPermission()))return; // немає дозволу — тихо пропускаємо
+    try{
+      const fh=await backupDirHandle.getFileHandle(fname,{create:true});
+      const w=await fh.createWritable();
+      await w.write(json);await w.close();
+      S.lastFileBackup=today;
+      try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+      await cleanOldBackups(S.settings.keepBackups||3);
+    }catch(e){}
+  }else if(mode==='dialog'&&force){
+    exportData();
+    S.lastFileBackup=today;
+    try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+  }
+}
+
+/* ===== init ===== */
+function renderAll(){fillSelects();renderStock();renderFlights();renderReport();renderDeliv();}// відступ знизу = реальна висота меню + запас (працює при будь-якому масштабі шрифту)
+function fitBottomPad(){
+  const nav=document.getElementById('nav');
+  document.body.style.paddingBottom=(nav.offsetHeight+72)+'px';
+}
+window.addEventListener('resize',fitBottomPad);
+window.addEventListener('load',fitBottomPad);
+fitBottomPad();setTimeout(fitBottomPad,300);setTimeout(fitBottomPad,1200);
+document.getElementById('f-date').value=todayISO();
+document.getElementById('r-date').value=todayISO();
+document.getElementById('d-date').value=todayISO();
+applyTheme();
+document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'🌙 Темна тема':'☀ Світла тема';
+(function(){const t=todayISO();const d=new Date(t);d.setDate(d.getDate()-6);
+  const wk=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  document.getElementById('exp-from').value=wk;document.getElementById('exp-to').value=t;})();
+(function(){const rs=document.getElementById('r-seg');
+  if(rs&&S.settings.cutHour!==undefined){const cs=String(S.settings.cutHour).padStart(2,'0')+':00';
+    rs.querySelector('[data-m="before"]').textContent='До '+cs;
+    rs.querySelector('[data-m="after"]').textContent='Після '+cs;}})();
+renderAll();
+if(S.settings.fileBackup==='folder'){bkLoadHandle().then(h=>{if(h){backupDirHandle=h;writeFileBackup(false);}});}
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
+
+</script>
+</body>
+</html>
