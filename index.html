@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.69</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.70</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -737,14 +737,29 @@ function buildDelivReport(date){
   const cr=crewFor(date);if(cr)lines.push('Екіпаж: '+cr);
   lines.push('');
   if(!arr.length){lines.push('Рухів не було.');return lines.join('\n');}
-  const inn=arr.filter(d=>d.dir==='in'),out=arr.filter(d=>d.dir==='out');
-  lines.push('ПРИЇХАЛО:');
-  if(inn.length)inn.forEach(d=>lines.push(`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`));
-  else lines.push('• —');
+  // порядок і назви категорій у звіті
+  const CATS=[['ammo','БК'],['drones','Дрони'],['nbg','Не БГ дрони'],['gear','Майно'],['other','Інше']];
+  const line=d=>`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`;
+  const section=(title,list)=>{
+    lines.push(title);
+    if(!list.length){lines.push('• —');return;}
+    let first=true;
+    CATS.forEach(([k,label])=>{
+      const items=list.filter(d=>(d.kind||'other')===k);
+      if(!items.length)return;
+      if(!first)lines.push('');
+      lines.push(label+':');
+      items.forEach(d=>lines.push(line(d)));
+      first=false;
+    });
+    // на випадок невідомої категорії — щоб нічого не загубилось
+    const known=CATS.map(c=>c[0]);
+    const rest=list.filter(d=>!known.includes(d.kind||'other'));
+    if(rest.length){if(!first)lines.push('');lines.push('Інше:');rest.forEach(d=>lines.push(line(d)));}
+  };
+  section('ПРИЇХАЛО:',arr.filter(d=>d.dir==='in'));
   lines.push('');
-  lines.push('ВИЇХАЛО:');
-  if(out.length)out.forEach(d=>lines.push(`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`));
-  else lines.push('• —');
+  section('ВИЇХАЛО:',arr.filter(d=>d.dir==='out'));
   return lines.join('\n');
 }
 
