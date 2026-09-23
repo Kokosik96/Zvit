@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.73</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.75</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -206,6 +206,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <button data-k="nbg">Не БГ</button>
     <button data-k="ammo">БК</button>
     <button data-k="gear">Майно</button>
+    <button data-k="fuel">Паливо</button>
   </div>
   <div class="card">
     <div class="row">
@@ -338,6 +339,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
           <option value="ammo">БК</option>
           <option value="drones">Дрони</option>
           <option value="gear">Майно</option>
+          <option value="fuel">Паливо</option>
           <option value="nbg">Не БГ</option>
           <option value="other">Інше (без складу)</option>
         </select>
@@ -473,6 +475,18 @@ function save(){
 }
 let S=load();
 if(!S.nbg)S.nbg=[];
+if(!S.fuel)S.fuel=[];
+// одноразове перенесення пального з Майна в категорію «Паливо»
+if(!S.fuelMigrated){
+  const isFuelName=n=>/(бензин|дизел|дизпалив|солярк|пальне|^\s*дп\s*$|а-?9[025]|аи-?9[025])/i.test(String(n||''));
+  const movedFuel=[];
+  S.gear=(S.gear||[]).filter(i=>{
+    if(isFuelName(i.name)){S.fuel.push(i);movedFuel.push(i.name);return false;}
+    return true;
+  });
+  S.fuelMigrated=true;
+  if(movedFuel.length)setTimeout(()=>toast('Перенесено в «Паливо»: '+movedFuel.join(', ')),900);
+}
 // синхронізація між вкладками: якщо інша вкладка зберегла дані — підхопити при поверненні
 window.addEventListener('storage',e=>{
   if(e.key===KEY&&e.newValue){
@@ -571,7 +585,7 @@ function importData(inp){
     if(!confirm(`Замінити поточні дані на дані з файлу?\n\nУ файлі: ${cnt}\n\nПоточні дані буде перезаписано.`)){inp.value='';return;}
     // страхувальний бекап поточного стану перед заміною
     try{localStorage.setItem(KEY+'-prev',localStorage.getItem(KEY)||'');}catch(e){}
-    S=data;if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Дані відновлено (попередні збережено про запас)');
+    S=data;if(!S.nbg)S.nbg=[];if(!S.fuel)S.fuel=[];save();renderAll();dlgSet.close();toast('Дані відновлено (попередні збережено про запас)');
     inp.value='';
   };
   r.readAsText(f);
@@ -611,7 +625,7 @@ function restoreSnapshot(){
   const idx=parseInt(ans)-1;
   if(idx<0||idx>=days.length){toast('Невірний номер');return;}
   try{localStorage.setItem(KEY+'-prev',localStorage.getItem(KEY)||'');}catch(e){}
-  try{S=JSON.parse(snaps[days[idx]]);if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Відновлено на '+fmtDate(days[idx]));}
+  try{S=JSON.parse(snaps[days[idx]]);if(!S.nbg)S.nbg=[];if(!S.fuel)S.fuel=[];save();renderAll();dlgSet.close();toast('Відновлено на '+fmtDate(days[idx]));}
   catch(e){toast('⚠ Не вдалося відновити');}
 }
 function undoImport(){
@@ -619,12 +633,12 @@ function undoImport(){
   try{prev=localStorage.getItem(KEY+'-prev');}catch(e){}
   if(!prev){toast('Немає попередніх даних для відкату');return;}
   if(!confirm('Повернути дані, які були ДО останнього відновлення з файлу?'))return;
-  try{S=JSON.parse(prev);if(!S.nbg)S.nbg=[];save();renderAll();dlgSet.close();toast('Повернуто попередні дані');}
+  try{S=JSON.parse(prev);if(!S.nbg)S.nbg=[];if(!S.fuel)S.fuel=[];save();renderAll();dlgSet.close();toast('Повернуто попередні дані');}
   catch(e){toast('⚠ Не вдалося відкотити');}
 }
 
 /* ===== доставка ===== */
-const KIND_LABEL={ammo:'БК',drones:'Дрони',gear:'Майно',nbg:'Не БГ',other:'Інше'};
+const KIND_LABEL={ammo:'БК',drones:'Дрони',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',other:'Інше'};
 function fillDelivNames(){
   const dl=document.getElementById('deliv-names');
   if(!dl)return;
@@ -646,7 +660,7 @@ function onDelivKindChange(){
   inp.value='';
   const k=document.getElementById('d-kind').value;
   inp.placeholder={ammo:'напр. МОА композит 61',drones:'напр. Інквізитор 10/15 км день',
-    gear:'напр. Патч-корд',nbg:'назва дрона',other:'напр. бензин'}[k]||'назва';
+    fuel:'напр. бензин',gear:'напр. Патч-корд',nbg:'назва дрона',other:'напр. вода'}[k]||'назва';
 }
 function addDeliv(){
   const date=document.getElementById('d-date').value||todayISO();
@@ -738,7 +752,7 @@ function buildDelivReport(date){
   lines.push('');
   if(!arr.length){lines.push('Рухів не було.');return lines.join('\n');}
   // порядок і назви категорій у звіті
-  const CATS=[['ammo','БК'],['drones','Дрони'],['nbg','Не БГ дрони'],['gear','Майно'],['other','Інше']];
+  const CATS=[['drones','Дрони'],['nbg','Не БГ дрони'],['ammo','БК'],['gear','Майно'],['fuel','Паливо'],['other','Інше']];
   const line=d=>`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`;
   const section=(title,list)=>{
     lines.push(title);
@@ -765,7 +779,7 @@ function buildDelivReport(date){
 
 /* ===== приймання позиції ===== */
 const dlgIntake=document.getElementById('dlg-intake');
-const INTAKE_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['ammo','БК'],['gear','Майно']];
+const INTAKE_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['ammo','БК'],['gear','Майно'],['fuel','Паливо']];
 function openIntake(){renderIntakeBody();dlgIntake.showModal();}
 function renderIntakeBody(){
   const el=document.getElementById('intake-body');
@@ -962,7 +976,7 @@ function renderStock(){
   }else{
     nameInp.removeAttribute('list');
     nameInp.placeholder={drones:'напр. Інквізитор 10/15км день',ammo:'напр. МОА композит 61',
-      gear:'напр. Патч-корд'}[stockKind]||'назва';
+      fuel:'напр. бензин',gear:'напр. Патч-корд'}[stockKind]||'назва';
   }
   if(!arr.length){el.innerHTML='<div class="empty">'+(stockKind==='nbg'?'Не БГ дронів немає':'Порожньо. Додай перший запис ↑')+'</div>';return;}
   if(stockKind==='nbg'){
@@ -1438,6 +1452,13 @@ function buildStockReport(date,noHeader){
     else lines.push(`•${i.name} - ${i.qty} ${u(i)}`);
   });
   else lines.push('•—');
+  const fuel=bySort((S.fuel||[]).filter(i=>i.qty>0));
+  if(fuel.length){
+    lines.push('');
+    lines.push('ПАЛИВО:');
+    lines.push('');
+    fuel.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
+  }
   return lines.join('\n');
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
@@ -1935,7 +1956,7 @@ function renderStockLog(){
     log=log.filter(e=>e.ts>=from&&e.ts<to);
   }
   if(!log.length){el.innerHTML='<div class="empty">'+(fd?'За '+fmtDate(fd)+' рухів не було':'Лог порожній')+'</div>';return;}
-  const kindName={ammo:'БК',drones:'Дрон',gear:'Майно',nbg:'Не БГ',flight:'Виліт'};
+  const kindName={ammo:'БК',drones:'Дрон',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',flight:'Виліт'};
   el.innerHTML=log.slice(0,100).map(e=>{
     const dt=new Date(e.ts);
     const ds=String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+' '+
