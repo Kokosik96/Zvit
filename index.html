@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.75</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.77</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -336,11 +336,11 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div class="row">
       <div><label>Категорія</label>
         <select id="d-kind" onchange="onDelivKindChange()">
-          <option value="ammo">БК</option>
           <option value="drones">Дрони</option>
+          <option value="nbg">Не БГ</option>
+          <option value="ammo">БК</option>
           <option value="gear">Майно</option>
           <option value="fuel">Паливо</option>
-          <option value="nbg">Не БГ</option>
           <option value="other">Інше (без складу)</option>
         </select>
       </div>
@@ -476,15 +476,33 @@ function save(){
 let S=load();
 if(!S.nbg)S.nbg=[];
 if(!S.fuel)S.fuel=[];
-// одноразове перенесення пального з Майна в категорію «Паливо»
+// одноразове виправлення: техніка, що помилково потрапила в «Паливо», повертається в Майно
+if(S.fuelMigrated&&!S.fuelFixed){
+  const notFuel=/(генератор|помп|пил[аи]|двигун|станц|каністр|\bбак\b|обігрів|пальник|фільтр|шланг|лійк|воронк|мотор)/i;
+  const back=[];
+  S.fuel=(S.fuel||[]).filter(i=>{
+    if(notFuel.test(String(i.name||''))){(S.gear=S.gear||[]).push(i);back.push(i.name);return false;}
+    return true;
+  });
+  S.fuelFixed=true;
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
+  if(back.length)setTimeout(()=>toast('Повернуто в «Майно»: '+back.join(', ')),1200);
+}
 if(!S.fuelMigrated){
-  const isFuelName=n=>/(бензин|дизел|дизпалив|солярк|пальне|^\s*дп\s*$|а-?9[025]|аи-?9[025])/i.test(String(n||''));
+  const isFuelName=n=>{
+    const s=String(n||'');
+    // техніка/обладнання, що містить слово пального у назві — НЕ паливо
+    if(/(генератор|помп|пил[аи]|двигун|станц|каністр|\bбак\b|обігрів|пальник|фільтр|шланг|лійк|воронк|мотор)/i.test(s))return false;
+    return /(бензин|дизел|дизпалив|солярк|пальне|^\s*дп\s*$|а-?9[025]|аи-?9[025])/i.test(s);
+  };
   const movedFuel=[];
   S.gear=(S.gear||[]).filter(i=>{
     if(isFuelName(i.name)){S.fuel.push(i);movedFuel.push(i.name);return false;}
     return true;
   });
   S.fuelMigrated=true;
+  S.fuelFixed=true;
+  try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}
   if(movedFuel.length)setTimeout(()=>toast('Перенесено в «Паливо»: '+movedFuel.join(', ')),900);
 }
 // синхронізація між вкладками: якщо інша вкладка зберегла дані — підхопити при поверненні
