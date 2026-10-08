@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.77</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.78</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -1081,9 +1081,11 @@ function strikePhrase(f){
   if(f.zhdun)tags.push('ждун');
   if(f.noRet)tags.push(f.noRet);
   const nr=tags.length?` (${tags.join(', ')})`:'';
+  // ждун — не удар, а засідка
+  const verb=f.zhdun?'засідка':'удар';
   if(t==='bomber')return `скид з бомбера ${f.droneName}${nr}`;
-  if(t==='radio')return `удар дроном-камікадзе ${f.droneName}${nr}`;
-  return `удар дроном-камікадзе на оптоволокні ${f.droneName}${nr}`;
+  if(t==='radio')return `${verb} дроном-камікадзе ${f.droneName}${nr}`;
+  return `${verb} дроном-камікадзе на оптоволокні ${f.droneName}${nr}`;
 }
 function flightText(f){
   const pos=f.position?`(позиція FPV “${f.position}”), `:'';
