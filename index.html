@@ -91,7 +91,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.84</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.86</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -143,6 +143,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div style="flex:2"><label>БК (зі складу)</label><select id="f-ammo"></select></div>
       <div><label>К-сть БК</label><input id="f-aqty" type="number" value="1" min="0" inputmode="numeric"></div>
     </div>
+    <div id="f-ammo-x"></div>
+    <button type="button" class="btn sec" style="margin-top:8px;padding:8px" onclick="addAmmoRow()">+ ще БК</button>
     <label>Ціль (по кому/чому)</label><input id="f-target" list="target-opts" placeholder="напр. живій силі противника">
     <datalist id="target-opts">
       <option value="живій силі противника"></option>
@@ -404,7 +406,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 
 <dialog id="dlg-intake">
   <h2 style="margin-top:0">Приймання позиції</h2>
-  <p class="note" style="margin-bottom:10px">Впиши фактичні залишки, які застав на позиції. 0 або порожнє поле — позицію буде прибрано зі складу.</p>
+  <p class="note" style="margin-bottom:10px">Впиши фактичні залишки, які застав на позиції. Порожнє поле = 0, позиція лишається в списку — назву не треба буде писати знову.</p>
   <button class="btn sec" style="margin-top:0" onclick="toggleIntakeImport()">📥 Завантажити список (текст або файл)</button>
   <div id="intake-imp" style="display:none;margin-top:8px">
     <textarea id="intake-text" rows="7" placeholder="Встав список у форматі звіту по наявності:&#10;ДРОНИ:&#10;•Назва - 5 шт.&#10;БК:&#10;•Назва - 10 шт."></textarea>
@@ -1071,8 +1073,9 @@ function toggleIntakeImport(){
 }
 function intakeHint(r,v){
   if(r.id===null)return v>0?'<span style="color:var(--green)">нове</span>':'<span style="color:var(--amber)">нове, але 0 — не додаватиметься</span>';
-  if(v===0)return `<span style="color:var(--red)">${intakeImp&&!r.matched?'нема у списку — ':''}буде прибрано${r.cur?` (було ${r.cur})`:''}</span>`;
-  return v!==r.cur?`було ${r.cur}`:'';
+  if(v===r.cur)return '';
+  if(v===0)return `<span style="color:var(--amber)">${intakeImp&&!r.matched?'нема у списку — ':''}стане 0 (було ${r.cur})</span>`;
+  return `було ${r.cur}`;
 }
 function renderIntakeBody(){
   const el=document.getElementById('intake-body');
@@ -1186,7 +1189,7 @@ function parseStockText(text){
   return {items,bad,warn,position};
 }
 const snKey=s=>String(s||'').replace(/\s+/g,'').toUpperCase();
-// приймаємо саме список: що є у списку — та кількість, чого нема — прибрати, нове — додати
+// приймаємо саме список: що є у списку — та кількість, чого нема — 0 (назва лишається), нове — додати
 function mergeIntake(rows,items){
   const agg=new Map();
   items.forEach(it=>{
@@ -1211,9 +1214,9 @@ function renderIntakeSum(){
   let h='';
   if(p.items.length){
     const nNew=intakeRows.filter(r=>r.id===null).length;
-    const nDel=intakeRows.filter(r=>r.id!==null&&r.qty===0).length;
+    const nZero=intakeRows.filter(r=>r.id!==null&&r.qty===0&&r.cur>0).length;
     const nChg=intakeRows.filter(r=>r.id!==null&&r.qty>0&&r.qty!==r.cur).length;
-    h+=`<b style="color:var(--accent)">Зі списку: ${p.items.length} поз.</b> · нових ${nNew} · змінено ${nChg} · прибрати ${nDel}`;
+    h+=`<b style="color:var(--accent)">Зі списку: ${p.items.length} поз.</b> · нових ${nNew} · змінено ${nChg} · обнулити ${nZero}`;
     if(p.position&&p.position!==(S.settings.position||''))
       h+=`<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:13.5px;color:var(--txt)"><input type="checkbox" id="intake-setpos" checked style="width:auto;margin:0"> Змінити позицію в налаштуваннях на «${esc(p.position)}»</label>`;
   }else h+=`<b style="color:var(--red)">Не знайшов жодної позиції.</b> Перевір: розділи (ДРОНИ / БК / ОБЛАДНАННЯ…) і рядки «•Назва - 5 шт.»`;
@@ -1246,24 +1249,26 @@ function intakeLoadFile(inp){
 }
 function intakeSetUnit(it,unit){if(unit&&unit!=='шт')it.unit=unit;else delete it.unit;}
 function applyIntake(){
-  const chg=[],add=[],del=[];
+  const chg=[],add=[];
   document.querySelectorAll('.intake-q').forEach(inp=>{
     const r=intakeRows[+inp.dataset.idx];if(!r)return;
     const to=Math.max(0,parseInt(inp.value)||0);
     if(r.id===null){if(to>0)add.push({r,to});return;}
     const it=(S[r.kind]||[]).find(x=>x.id===r.id);if(!it)return;
-    if(to===0)del.push({r,it});
-    else if(to!==it.qty||(intakeImp&&r.matched&&(it.unit||'')!==(r.unit||'')))chg.push({r,it,to});
+    if(to!==it.qty||(intakeImp&&r.matched&&(it.unit||'')!==(r.unit||'')))chg.push({r,it,to});
   });
+  // нульові позиції не прибираємо — назва лишається, щоб не писати її знову, коли привезуть
+  const nZero=chg.filter(c=>c.to===0).length,nChg=chg.length-nZero;
   const posBox=document.getElementById('intake-setpos');
   const setPos=intakeImp&&intakeImp.items.length&&posBox&&posBox.checked?intakeImp.position:'';
-  if(!chg.length&&!add.length&&!del.length&&!setPos){dlgIntake.close();toast('Змін немає');return;}
-  const L=[...chg.map(c=>`${c.it.name}: ${c.it.qty} → ${c.to}`),...add.map(a=>`+ ${a.r.name}: ${a.to}`),...del.map(d=>`− ${d.it.name}: прибрати`)];
-  const head=`Змінено: ${chg.length} · нових: ${add.length} · прибрати: ${del.length}`+(setPos?`\nПозиція: ${S.settings.position||'—'} → ${setPos}`:'');
+  if(!chg.length&&!add.length&&!setPos){dlgIntake.close();toast('Змін немає');return;}
+  const L=[...chg.filter(c=>c.to>0).map(c=>`${c.it.name}: ${c.it.qty} → ${c.to}`),...add.map(a=>`+ ${a.r.name}: ${a.to}`),
+    ...chg.filter(c=>c.to===0).map(c=>`${c.it.name}: ${c.it.qty} → 0`)];
+  const head=`Змінено: ${nChg} · нових: ${add.length} · обнулити: ${nZero}`+(setPos?`\nПозиція: ${S.settings.position||'—'} → ${setPos}`:'');
   if(!confirm(`Прийняти позицію?\n${head}\n\n${L.slice(0,10).join('\n')}${L.length>10?`\n…і ще ${L.length-10}`:''}`))return;
   savePrev(); // страховка: «↩ Відкотити» в налаштуваннях поверне все, як було до приймання
   const today=todayISO();
-  logStock('приймання позиції','—',`змінено ${chg.length} · нових ${add.length} · прибрано ${del.length}${intakeImp&&intakeImp.items.length?' · зі списку':''}`,0,fmtDate(today));
+  logStock('приймання позиції','—',`змінено ${nChg} · нових ${add.length} · обнулено ${nZero}${intakeImp&&intakeImp.items.length?' · зі списку':''}`,0,fmtDate(today));
   // деталі кожної зміни — щоб при звірці було видно, що саме змінилось
   chg.forEach(c=>{
     const from=c.it.qty;c.it.qty=c.to;
@@ -1277,19 +1282,15 @@ function applyIntake(){
     S[a.r.kind].push(it);
     logStock('  ↳ приймання (нове)',a.r.kind,it.name,a.to,`стало ${a.to}`);
   });
-  del.forEach(d=>{
-    S[d.r.kind]=S[d.r.kind].filter(x=>x.id!==d.it.id);
-    logStock('  ↳ приймання (прибрано)',d.r.kind,d.it.name,-d.it.qty,`було ${d.it.qty} → прибрано`);
-  });
   if(setPos)S.settings.position=setPos;
   // вильоти й доставки до цього моменту більше не рухають склад: його щойно перераховано
   S.flights.forEach(f=>{f.settled=1;});
   (S.deliveries||[]).forEach(d=>{d.settled=1;});
   if(!S.shifts)S.shifts=[];
-  S.shifts.unshift({id:uid(),date:today,changed:chg.length+add.length+del.length});
+  S.shifts.unshift({id:uid(),date:today,changed:chg.length+add.length});
   if(S.shifts.length>50)S.shifts.length=50;
   save();renderAll();dlgIntake.close();
-  toast(`Позицію прийнято: змінено ${chg.length} · нових ${add.length} · прибрано ${del.length}`,4000);
+  toast(`Позицію прийнято: змінено ${nChg} · нових ${add.length} · обнулено ${nZero}`,4000);
 }
 // записи, створені до останнього приймання позиції (і тоді, коли воно було на старій версії), позначаємо —
 // вони більше не рухають склад. Час створення беремо з id: uid() = час у base36 (8 знаків) + 4 випадкові
@@ -1304,6 +1305,36 @@ function markSettledByShift(){
     S.flights.forEach(mark);(S.deliveries||[]).forEach(mark);
     if(n)save();
   }catch(e){}
+}
+// v0.83–0.84 при прийманні прибирали нульові позиції. Тепер вони лишаються, тож один раз пропонуємо
+// повернути прибрані назви з нулем (беремо з логу складу, якщо такої назви зараз немає)
+function restorableRemoved(){
+  const seen=new Set(),out=[];
+  (S.stockLog||[]).forEach(e=>{
+    if(!e||e.action!=='  ↳ приймання (прибрано)'||!INTAKE_KINDS.some(([k])=>k===e.kind)||!e.name)return;
+    const key=e.kind+'|'+nkey(e.name);
+    if(seen.has(key))return;seen.add(key);
+    if((S[e.kind]||[]).some(i=>nkey(i.name)===nkey(e.name)))return;
+    out.push({kind:e.kind,name:e.name});
+  });
+  return out;
+}
+function offerRestoreRemoved(){
+  if(S.restoreAsked||document.querySelector('dialog[open]'))return;
+  const list=restorableRemoved();
+  if(!list.length)return;
+  const names=list.slice(0,6).map(x=>x.name).join(', ')+(list.length>6?` і ще ${list.length-6}`:'');
+  const yes=confirm(`При минулому прийманні позиції зі списків прибрано позицій з нулем: ${list.length}\n(${names}).\n\nПовернути їх у списки з нулем, щоб не писати назви заново?`);
+  S.restoreAsked=1;
+  if(yes){
+    list.forEach(x=>{
+      const it={id:uid(),name:x.name,qty:0};
+      if(x.kind==='fuel')it.unit='л';
+      S[x.kind].push(it);
+      logStock('повернуто назву (0)',x.kind,x.name,0,'прибрано при прийманні');
+    });
+    save();renderAll();toast(`Повернуто позицій з нулем: ${list.length}`,3500);
+  }else save();
 }
 function renderShiftInfo(){
   const el=document.getElementById('shift-info');
@@ -1437,6 +1468,7 @@ function saveStockEdit(){
     S.flights.forEach(f=>{
       if(kind==='drones'&&f.droneId===id)f.droneName=n;
       if(kind==='ammo'&&f.ammoId===id)f.ammoName=n;
+      if(kind==='ammo'&&Array.isArray(f.ammoExtra))f.ammoExtra.forEach(x=>{if(x&&x.id===id)x.name=n;});
     });
   }
   save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
@@ -1623,6 +1655,39 @@ function fillSelects(){
   d.innerHTML='<option value="">— обери дрон —</option>'+dg+S.drones.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.qty})</option>`).join('');
   a.innerHTML='<option value="">— без БК —</option>'+ag+S.ammo.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.qty})</option>`).join('');
   d.value=dv;a.value=av;
+  document.querySelectorAll('#f-ammo-x .ammo-x').forEach(r=>fillAmmoRow(r));
+}
+// --- кілька БК на один виліт: додаткові рядки під основним БК ---
+function fillAmmoRow(row,val){
+  const sel=row.querySelector('.ax-sel');
+  const v=val!==undefined?val:sel.value;
+  // «привид»: при редагуванні старого вильоту цей БК уже видалено зі складу — показуємо як було
+  const gid=row.dataset.gid||'',gname=row.dataset.gname||'';
+  const ghost=(gid&&gname&&!S.ammo.some(i=>i.id===gid))?`<option value="${esc(gid)}">⚠ ${esc(gname)} — нема на складі</option>`:'';
+  sel.innerHTML='<option value="">— обери БК —</option>'+ghost+S.ammo.map(i=>`<option value="${i.id}">${esc(i.name)} (${i.qty})</option>`).join('');
+  sel.value=v;
+}
+function addAmmoRow(){
+  const row=document.createElement('div');
+  row.className='row ammo-x';row.style.marginTop='8px';row.style.alignItems='center';
+  row.innerHTML=`<div style="flex:2"><select class="ax-sel"></select></div>
+    <div><input class="ax-qty" type="number" min="1" value="1" inputmode="numeric"></div>
+    <button type="button" class="del" title="Прибрати" onclick="this.closest('.ammo-x').remove()">✕</button>`;
+  document.getElementById('f-ammo-x').appendChild(row);
+  fillAmmoRow(row,'');
+  return row;
+}
+// додаткові БК вильоту з даних (для редагування і «Повторити»)
+function setAmmoRows(f,asGhost){
+  document.getElementById('f-ammo-x').innerHTML='';
+  (Array.isArray(f.ammoExtra)?f.ammoExtra:[]).forEach((x,i)=>{
+    if(!x||!x.name)return;
+    const row=addAmmoRow();
+    const id=x.id||(asGhost?'__oldx'+i:'');
+    if(asGhost){row.dataset.gid=id;row.dataset.gname=x.name;}
+    fillAmmoRow(row,id);
+    row.querySelector('.ax-qty').value=x.qty||1;
+  });
 }
 document.getElementById('f-res').addEventListener('change',e=>{
   document.getElementById('f-res-c').style.display=e.target.value==='_c'?'block':'none';
@@ -1682,7 +1747,8 @@ function strikePhrase(f){
 }
 function flightText(f){
   const pos=f.position?`(позиція FPV “${f.position}”), `:'';
-  const ammo=f.ammoName?` ( ${cap(f.ammoName)} - ${f.ammoQty||1} шт. )`:' ( без БК )';
+  const am=flightAmmo(f);
+  const ammo=am.length?` ( ${am.map((x,i)=>`${cap(x.name)} - ${i===0?(x.qty||1):x.qty} шт.`).join(' + ')} )`:' ( без БК )';
   const tgt=f.target?(standaloneTarget(f.target)?`${f.target} `:`по ${f.target} `):'';
   return `${f.t1} - ${f.t2} ${pos}${strikePhrase(f)}${ammo}, ${tgt}в районі ${f.grid}\n`+
     `Результат: ${f.result}\n`+
@@ -1748,11 +1814,26 @@ function saveFlight(){
   const keepAmmo=!!ammoId&&!ammo&&!!old&&!!old.ammoName&&ammoId===(old.ammoId||GHOST_ID);
   if(!drone&&!keepDrone){toast('Цього дрона вже немає на складі — обери інший');fillSelects();return;}
   if(ammoId&&!ammo&&!keepAmmo){toast('Цього БК вже немає на складі — обери інший');fillSelects();return;}
+  // усі БК вильоту: основний + додаткові («+ ще БК»); однакові зводимо в один рядок
+  const allAmmo=[];
+  if(ammo||keepAmmo)allAmmo.push({id:ammo?ammo.id:(old.ammoId||''),name:ammo?ammo.name:old.ammoName,qty:aq,it:ammo||null});
+  for(const r of document.querySelectorAll('#f-ammo-x .ammo-x')){
+    const xid=r.querySelector('.ax-sel').value;
+    const xq=Math.max(0,parseInt(r.querySelector('.ax-qty').value)||0);
+    if(!xid||!xq)continue;                                   // порожній рядок — пропускаємо
+    const it=S.ammo.find(i=>i.id===xid);
+    let x=null;
+    if(it)x={id:it.id,name:it.name,qty:xq,it};
+    else if(old&&r.dataset.gid===xid&&r.dataset.gname)x={id:xid.startsWith('__old')?'':xid,name:r.dataset.gname,qty:xq,it:null};
+    else{toast('Цього БК вже немає на складі — обери інший');fillSelects();return;}
+    const dup=allAmmo.find(a=>(a.id&&a.id===x.id)||(!a.id&&!x.id&&nkey(a.name)===nkey(x.name)));
+    if(dup)dup.qty+=x.qty;else allAmmo.push(x);
+  }
   if(!editId&&lost&&drone&&drone.qty===0){
     if(!confirm(`«${drone.name}» — на складі 0 шт.\nСписати не буде з чого. Зберегти виліт як є?`))return;
   }
-  if(!editId&&ammo&&aq>ammo.qty){
-    if(!confirm(`«${ammo.name}» — на складі ${ammo.qty}, а списується ${aq}.\nСпишеться лише ${ammo.qty}. Продовжити?`))return;
+  if(!editId)for(const a of allAmmo){
+    if(a.it&&a.qty>a.it.qty&&!confirm(`«${a.it.name}» — на складі ${a.it.qty}, а списується ${a.qty}.\nСпишеться лише ${a.it.qty}. Продовжити?`))return;
   }
   if(grid&&!looksLikeMgrs(grid)){
     if(!confirm(`Квадрат «${grid}» виглядає незвично для MGRS (зразок: 37U AB 12345 67890).\nЗберегти як є?`))return;
@@ -1775,7 +1856,7 @@ function saveFlight(){
   const wr=[];
   if(!settled){
     if(lost&&drone){drone.qty=Math.max(0,drone.qty-1);wr.push(`${drone.name} −1`);}
-    if(ammo&&aq>0){ammo.qty=Math.max(0,ammo.qty-aq);wr.push(`${ammo.name} −${aq}`);}
+    allAmmo.forEach(a=>{if(a.it&&a.qty>0){a.it.qty=Math.max(0,a.it.qty-a.qty);wr.push(`${a.it.name} −${a.qty}`);}});
   }
   if(wr.length)logStock('списано (виліт)','flight',wr.join(' · '),0,`${fmtDate(date)} ${t1}–${t2}`);
 
@@ -1784,13 +1865,15 @@ function saveFlight(){
     unit:(old&&old.unit)?old.unit:S.settings.unit,position:(old&&old.position)?old.position:S.settings.position,
     droneId:drone?drone.id:(old.droneId||''),droneName:drone?drone.name:old.droneName,
     lost,ftype:ftypeVal,noRet,zhdun:document.getElementById('f-zhdun').value==='1',
-    ammoId:ammo?ammo.id:(keepAmmo?(old.ammoId||''):''),ammoName:ammo?ammo.name:(keepAmmo?old.ammoName:''),ammoQty:(ammo||keepAmmo)?aq:0,
+    ammoId:allAmmo[0]?allAmmo[0].id:'',ammoName:allAmmo[0]?allAmmo[0].name:'',ammoQty:allAmmo[0]?allAmmo[0].qty:0,
     target,grid,result:res,loss,losses:lossList};
+  if(allAmmo.length>1)f.ammoExtra=allAmmo.slice(1).map(a=>({id:a.id,name:a.name,qty:a.qty}));
   if(settled)f.settled=1;
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);if(i>=0)S.flights[i]=f;else S.flights.push(f);editId=null;
     document.getElementById('f-cancel').style.display='none';
     // попереджаємо, лише якщо правка змінила б склад (дрон, списання, БК чи кількість БК)
-    const touch=settled&&((old.droneId||'')!==f.droneId||!!old.lost!==!!f.lost||(old.ammoId||'')!==f.ammoId||(old.ammoQty||0)!==f.ammoQty);
+    const sig=x=>flightAmmo(x).map(a=>(a.id||a.name)+':'+a.qty).sort().join('|');
+    const touch=settled&&((old.droneId||'')!==f.droneId||!!old.lost!==!!f.lost||sig(old)!==sig(f));
     if(touch)toast('Виліт оновлено. Склад не змінено — виліт записано до приймання позиції',4500);
     else toast('Виліт оновлено');}
   else{
@@ -1807,13 +1890,14 @@ function restoreStock(f,why){
   const rb=[];
   if(f.lost){const d=S.drones.find(i=>i.id===f.droneId);
     if(d){d.qty++;rb.push(`${d.name} +1`);}}
-  if(f.ammoId&&f.ammoQty>0){const a=S.ammo.find(i=>i.id===f.ammoId);
-    if(a){a.qty+=f.ammoQty;rb.push(`${a.name} +${f.ammoQty}`);}}
+  flightAmmo(f).forEach(x=>{if(x.id&&x.qty>0){const a=S.ammo.find(i=>i.id===x.id);
+    if(a){a.qty+=x.qty;rb.push(`${a.name} +${x.qty}`);}}});
   if(rb.length)logStock('повернуто на склад','flight',rb.join(' · '),0,why||'видалення вильоту');
 }
 function clearForm(){
   ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist','f-noret'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('f-aqty').value=1;
+  document.getElementById('f-ammo-x').innerHTML='';
   document.getElementById('f-res').value='Влучання в ціль';
   document.getElementById('f-res-c').style.display='none';
   pendingLosses=[];renderLossChips();
@@ -1834,6 +1918,7 @@ function editFlight(id){
   document.getElementById('f-lost').value=f.lost?'1':'0';
   document.getElementById('f-ammo').value=f.ammoId||(f.ammoName?GHOST_ID:'');
   document.getElementById('f-aqty').value=f.ammoQty||0;
+  setAmmoRows(f,true);
   document.getElementById('f-target').value=f.target;
   document.getElementById('f-grid').value=f.grid;
   {const ll=(f.losses&&f.losses.length)?f.losses.slice():((f.loss||'').trim()&&!/^уточн/i.test(f.loss)?[f.loss.trim()]:[]);
@@ -1893,6 +1978,7 @@ function dupFlight(id){
   document.getElementById('f-lost').value=f.lost?'1':'0';
   document.getElementById('f-ammo').value=f.ammoId||'';
   document.getElementById('f-aqty').value=f.ammoQty||0;
+  setAmmoRows(f,false);
   document.getElementById('f-target').value=f.target||'';
   document.getElementById('f-grid').value=f.grid||'';
   document.getElementById('f-loss').value='';
@@ -1909,7 +1995,7 @@ function dupFlight(id){
   // дрон/БК з того вильоту вже видалено зі складу — попереджаємо, щоб не зберегти «без БК» непомітно
   const miss=[];
   if(f.droneName&&!S.drones.some(i=>i.id===f.droneId))miss.push('дрона «'+f.droneName+'»');
-  if(f.ammoName&&!S.ammo.some(i=>i.id===f.ammoId))miss.push('БК «'+f.ammoName+'»');
+  flightAmmo(f).forEach(x=>{if(!S.ammo.some(i=>i.id===x.id))miss.push('БК «'+x.name+'»');});
   if(miss.length)toast('⚠ На складі вже немає '+miss.join(' і ')+' — обери інше',4500);
   else toast('Дані підставлено — впиши час і збережи');
 }
@@ -2008,7 +2094,7 @@ function renderFlights(){
   let arr, header;
   if(q){
     arr=S.flights.filter(f=>{
-      const hay=[f.droneName,f.target,f.grid,f.result,f.ammoName,f.loss,fmtDate(f.date)].join(' ').toLowerCase();
+      const hay=[f.droneName,f.target,f.grid,f.result,flightAmmo(f).map(a=>a.name).join(' '),f.loss,fmtDate(f.date)].join(' ').toLowerCase();
       return hay.includes(q);
     }).sort((a,b)=>b.date.localeCompare(a.date)||b.t1.localeCompare(a.t1,undefined,{numeric:true}));
     document.getElementById('fly-day-pre').textContent='Пошук по вильотах:';
@@ -2023,7 +2109,7 @@ function renderFlights(){
     if(day.length){
       const h=day.filter(f=>/влуч|ураж/i.test(f.result)).length;
       const ha=day.filter(isAreaHit).length;
-      const bk=day.reduce((s,f)=>s+(f.ammoQty||0),0);
+      const bk=day.reduce((s,f)=>s+ammoSum(f),0);
       const ld=day.filter(f=>f.lost).length;
       ds.innerHTML=`<b style="color:var(--accent)">${fmtDate(date)}:</b> вильотів ${day.length} · влучань ${h}${ha?` (з них у район ${ha})`:''} · БК ${bk} · дронів списано ${ld}`;
     }else ds.innerHTML='';
@@ -2101,6 +2187,14 @@ function buildStockReport(date,noHeader){
   return lines.join('\n');
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):s;}
+// усі БК вильоту: основний (ammoId/ammoName/ammoQty) + додаткові (ammoExtra)
+function flightAmmo(f){
+  const a=[];
+  if(f&&f.ammoName)a.push({id:f.ammoId||'',name:f.ammoName,qty:f.ammoQty||0});
+  if(f&&Array.isArray(f.ammoExtra))f.ammoExtra.forEach(x=>{if(x&&x.name)a.push({id:x.id||'',name:x.name,qty:+x.qty||0});});
+  return a;
+}
+const ammoSum=f=>flightAmmo(f).reduce((s,x)=>s+(x.qty||0),0);
 // розбір запису втрат: "2х300, знищено укриття" → {200:0,300:2,other:['знищено укриття']}
 function parseLoss(s){
   const out={200:0,300:0,other:[]};
@@ -2157,7 +2251,7 @@ function buildReport(date,part){
   lines.push('ВИТРАТА БК:');
   lines.push('');
   const ammoUse={};
-  arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+  arr.forEach(f=>flightAmmo(f).forEach(a=>{if(a.qty>0)ammoUse[a.name]=(ammoUse[a.name]||0)+a.qty;}));
   const au=Object.entries(ammoUse);
   if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
   else lines.push('• —');
@@ -2285,7 +2379,7 @@ function currentStatFilter(){
   const fD=v('flt-drone'),fA=v('flt-ammo'),fR=v('flt-res'),fL=v('flt-loss'),fT=v('flt-type'),fZ=v('flt-zhdun');
   const pred=f=>
     (!fD||f.droneName===fD)&&
-    (!fA||f.ammoName===fA)&&
+    (!fA||flightAmmo(f).some(a=>a.name===fA))&&
     (!fR||cap((f.result||'').split('(')[0].trim().toLowerCase())===fR)&&
     (!fL||lossKeys(f).includes(fL))&&
     (!fT||(f.ftype||'fiber')===fT)&&
@@ -2302,7 +2396,7 @@ function fillStatsFilters(pool){
     if(vals.includes(cur))el.value=cur;else el.value='';
   };
   const drones=[...new Set(pool.map(f=>f.droneName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
-  const ammos=[...new Set(pool.map(f=>f.ammoName).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+  const ammos=[...new Set(pool.flatMap(f=>flightAmmo(f).map(a=>a.name)))].sort((a,b)=>a.localeCompare(b,'uk'));
   const ress=[...new Set(pool.map(f=>cap((f.result||'').split('(')[0].trim().toLowerCase())).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,'uk'));
   mk('flt-drone',drones,'дрони');
@@ -2342,7 +2436,7 @@ function renderStats(){
   const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
   const areaHit=arr.filter(isAreaHit).length;
   const lost=arr.filter(f=>f.lost).length;
-  const ammoTotal=arr.reduce((s,f)=>s+(f.ammoQty||0),0);
+  const ammoTotal=arr.reduce((s,f)=>s+ammoSum(f),0);
   const filtered=arr.length!==pool.length;
   const shareStr=filtered&&pool.length?` · ${Math.round(arr.length/pool.length*100)}% від ${pool.length}`:'';
   // тривалість польотів
@@ -2458,7 +2552,7 @@ function renderStats(){
         :String(o.qty);
       return [k,{fl:o.fl,right,sub:`у ${nf} ${nf===1?'вильоті':'вильотах'} — ${pct}% від усіх`}];
     }));
-  const ammoUse={};arr.forEach(f=>{if(f.ammoName&&f.ammoQty)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+  const ammoUse={};arr.forEach(f=>flightAmmo(f).forEach(a=>{if(a.qty)ammoUse[a.name]=(ammoUse[a.name]||0)+a.qty;}));
   document.getElementById('stats-ammo').innerHTML=Object.keys(ammoUse).length?
     Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]).map(([n,q])=>`<div class="item"><div class="nm">${esc(n)}</div><div class="qty">${q}</div></div>`).join('')
     :'<div class="empty">Немає даних</div>';
@@ -2485,10 +2579,11 @@ function renderStats(){
   // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
   const aStat={};
   arr.forEach(f=>{
-    if(!f.ammoName)return;
-    if(!aStat[f.ammoName])aStat[f.ammoName]={fl:0,hit:0,list:[]};
-    aStat[f.ammoName].fl++;aStat[f.ammoName].list.push(f);
-    if(/влуч|ураж/i.test(f.result))aStat[f.ammoName].hit++;
+    [...new Set(flightAmmo(f).map(a=>a.name))].forEach(n=>{
+      if(!aStat[n])aStat[n]={fl:0,hit:0,list:[]};
+      aStat[n].fl++;aStat[n].list.push(f);
+      if(/влуч|ураж/i.test(f.result))aStat[n].hit++;
+    });
   });
   renderGroups('stats-ammoeff','ammo',
     Object.entries(aStat).sort((a,b)=>(b[1].hit/b[1].fl)-(a[1].hit/a[1].fl)).map(([n,s])=>{
@@ -2502,7 +2597,7 @@ function periodMetrics(list){
   const hit=list.filter(f=>/влуч|ураж/i.test(f.result)).length;
   let l200=0,l300=0;
   list.forEach(f=>{const raw=(f.loss||'').trim();if(!raw||/^уточн/i.test(raw))return;const p=parseLoss(raw);l200+=p[200];l300+=p[300];});
-  return{n,hitPct:n?Math.round(hit/n*100):null,bk:list.reduce((s,f)=>s+(f.ammoQty||0),0),lost:list.filter(f=>f.lost).length,l200,l300};
+  return{n,hitPct:n?Math.round(hit/n*100):null,bk:list.reduce((s,f)=>s+ammoSum(f),0),lost:list.filter(f=>f.lost).length,l200,l300};
 }
 function renderCompare(pred){
   const wrap=document.getElementById('cmp-wrap'),box=document.getElementById('cmp-box');
@@ -2621,7 +2716,7 @@ function exportSummary(){
     lines.push('');
     lines.push('ВИТРАТА БК:');
     const ammoUse={};
-    arr.forEach(f=>{if(f.ammoName&&f.ammoQty>0)ammoUse[f.ammoName]=(ammoUse[f.ammoName]||0)+f.ammoQty;});
+    arr.forEach(f=>flightAmmo(f).forEach(a=>{if(a.qty>0)ammoUse[a.name]=(ammoUse[a.name]||0)+a.qty;}));
     const au=Object.entries(ammoUse).sort((a,b)=>b[1]-a[1]);
     if(au.length)au.forEach(([n,q])=>lines.push(`• ${cap(n)} - ${q} шт.`));
     else lines.push('• —');
@@ -2763,7 +2858,8 @@ function exportCSV(){
   if(!arr.length){toast('За період вильотів немає');return;}
   const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
   const rows=[['Дата','Зліт','Посадка','Дрон','Списано','БК','К-сть БК','Ціль','Квадрат','Результат','Втрати ворога']];
-  arr.forEach(f=>rows.push([fmtDate(f.date),f.t1,f.t2,f.droneName,f.lost?'так':'ні',f.ammoName,f.ammoQty||0,f.target,f.grid,f.result,f.loss]));
+  arr.forEach(f=>{const am=flightAmmo(f);
+    rows.push([fmtDate(f.date),f.t1,f.t2,f.droneName,f.lost?'так':'ні',am.length>1?am.map(a=>`${a.name} (${a.qty})`).join(' + '):(f.ammoName||''),ammoSum(f),f.target,f.grid,f.result,f.loss]);});
   const csv='\uFEFF'+rows.map(r=>r.map(q).join(';')).join('\r\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -2879,6 +2975,7 @@ document.getElementById('theme-btn').textContent=S.settings.theme==='light'?'�
     rs.querySelector('[data-m="after"]').textContent='Після '+cs;}})();
 markSettledByShift();
 renderAll();
+setTimeout(offerRestoreRemoved,900);
 // сховище: перенос старих знімків в IndexedDB + захист від очищення браузером
 migrateSnapsToIDB().catch(()=>{});
 requestPersist();
