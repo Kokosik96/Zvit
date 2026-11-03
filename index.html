@@ -86,12 +86,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .toast.on{opacity:1}
 .note{font-size:12.5px;color:var(--muted);margin-top:8px}
 .badge{font-size:11.5px;border:1px solid var(--line);border-radius:6px;padding:2px 7px;color:var(--muted)}
+.mask{-webkit-text-security:disc}.mask:placeholder-shown{-webkit-text-security:none}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.86</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.87</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -158,6 +159,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </datalist>
     <label>Район (квадрат)</label><input id="f-grid" list="grid-opts" placeholder="37U AB 12345 67890" style="font-family:var(--mono)">
     <datalist id="grid-opts"></datalist>
+    <label>Відстань до цілі, км (тільки для статистики, у звіт не йде)</label>
+    <div class="row" style="align-items:center">
+      <input id="f-dist" inputmode="decimal" autocomplete="off" placeholder="рахується з квадрата" style="flex:3">
+      <button type="button" class="btn sec" style="margin-top:0;flex:1" onclick="calcDist(true)" title="Порахувати від моєї точки">↻</button>
+    </div>
+    <div id="f-dist-hint" class="note" style="margin-top:4px"></div>
     <label>Втрати противника (якщо відомі)</label><input id="f-loss" list="loss-opts" placeholder="напр. 2х300, знищено бліндаж">
     <datalist id="loss-opts">
       <option value="уточнюються"></option>
@@ -313,6 +320,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div id="stats-topdrone"></div>
   <h2>Ефективність по БК (% влучань)</h2>
   <div id="stats-ammoeff"></div>
+  <h2>Відстань до цілі (% влучань)</h2>
+  <div id="stats-dist"></div>
   <h2>Витрати БК за період</h2>
   <div id="stats-ammo"></div>
   <h2>Списано дронів за період</h2>
@@ -431,6 +440,13 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <label>Підрозділ</label><input id="set-unit" placeholder="назва підрозділу">
   <label>Позиція БпЛА</label><input id="set-pos" placeholder="позивний позиції">
   <label>Екіпаж (позивні через кому)</label><input id="set-crew" placeholder="«Ворон», «Тихий», «Малий»">
+  <label>Моя точка (MGRS) — для відстані до цілі</label>
+  <div class="row" style="align-items:center">
+    <input id="set-mypt" class="mask" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="37U AB 12345 67890" style="flex:3;font-family:var(--mono)">
+    <button type="button" class="btn sec" style="margin-top:0;flex:1" onclick="toggleMyPt()" title="Показати / сховати">👁</button>
+  </div>
+  <button type="button" class="btn sec" onclick="clearMyPt()">🗑 Стерти мою точку</button>
+  <p class="note">Зберігається тільки в цьому телефоні: у звіти, CSV і на сайт не потрапляє. Є в резервних копіях — їх нікому не кидай.</p>
   <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
   <label>Скільки копій тримати в папці</label><input id="set-keep" type="number" min="1" max="10" value="3" inputmode="numeric">
   <label>Година розділу звітів (до/після)</label><input id="set-cut" type="number" min="0" max="23" value="18" inputmode="numeric">
@@ -729,6 +745,7 @@ function openSettings(){
   document.getElementById('set-unit').value=S.settings.unit;
   document.getElementById('set-pos').value=S.settings.position;
   document.getElementById('set-crew').value=S.settings.crew||'';
+  {const mp=document.getElementById('set-mypt');mp.value=S.settings.myPoint||'';mp.classList.add('mask');}
   document.getElementById('set-low').value=S.settings.lowThreshold??2;
   document.getElementById('set-keep').value=S.settings.keepBackups??3;
   document.getElementById('set-cut').value=S.settings.cutHour??18;
@@ -749,6 +766,11 @@ function openSettings(){
   dlgSet.showModal();
 }
 function saveSettings(){
+  // моя точка: перевіряємо до збереження, щоб у налаштуваннях не лишилось сміття
+  const mpRaw=document.getElementById('set-mypt').value.trim();
+  const mp=mpRaw?parseMgrs(mpRaw):null;
+  if(mpRaw&&!mp){toast('Моя точка не схожа на MGRS (зразок: 37U AB 12345 67890)',3500);return;}
+  if(mp)S.settings.myPoint=mp.text;else delete S.settings.myPoint;
   S.settings.unit=document.getElementById('set-unit').value.trim();
   S.settings.position=document.getElementById('set-pos').value.trim();
   S.settings.crew=document.getElementById('set-crew').value.trim();
@@ -761,6 +783,30 @@ function saveSettings(){
     rs.querySelector('[data-m="after"]').textContent='Після '+cs;}
   save();dlgSet.close();toast('Збережено');
   if(S.settings.fileBackup==='folder')cleanOldBackups(S.settings.keepBackups);
+}
+function toggleMyPt(){document.getElementById('set-mypt').classList.toggle('mask');}
+// стерти точку: з даних і з автозбережень у телефоні (знімки, страхувальна копія)
+async function clearMyPt(){
+  const inp=document.getElementById('set-mypt');
+  if(!S.settings.myPoint&&!inp.value.trim()){toast('Точка не вказана');return;}
+  if(!confirm('Стерти твою точку з телефону?\nВідстань до цілі перестане рахуватись сама. Уже записані відстані у вильотах лишаться.'))return;
+  delete S.settings.myPoint;inp.value='';save();
+  let n=0;
+  const scrub=raw=>{try{const o=JSON.parse(raw);if(o&&o.settings&&o.settings.myPoint){delete o.settings.myPoint;return JSON.stringify(o);}}catch(e){}return null;};
+  try{
+    for(const k of await kvKeys()){
+      if(typeof k!=='string'||!(k.startsWith('snap:')||k==='prev'))continue;
+      const raw=await kvGet(k);if(typeof raw!=='string'||!raw.includes('myPoint'))continue;
+      const clean=scrub(raw);if(clean&&await kvSet(k,clean))n++;
+    }
+  }catch(e){}
+  // старе сховище знімків (якщо IndexedDB колись була недоступна)
+  try{
+    const pr=localStorage.getItem(KEY+'-prev');if(pr&&pr.includes('myPoint')){const c=scrub(pr);if(c){localStorage.setItem(KEY+'-prev',c);n++;}}
+    const sn=localStorage.getItem(KEY+'-snaps');
+    if(sn&&sn.includes('myPoint')){const o=JSON.parse(sn);for(const d in o){const c=scrub(o[d]);if(c){o[d]=c;n++;}}localStorage.setItem(KEY+'-snaps',JSON.stringify(o));}
+  }catch(e){}
+  toast('Точку стерто'+(n?` (і з автозбережень: ${n})`:'')+'. У вже збережених файлах бекапу вона лишилась',4500);
 }
 function exportData(){
   const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
@@ -1761,6 +1807,69 @@ const normTime=s=>{
   return s;
 };
 const looksLikeMgrs=g=>/^\d{1,2}\s?[A-Za-z]\s?[A-Za-z]{2}\s?\d{4,5}\s?\d{4,5}$/.test(g.trim());
+/* ===== відстань до цілі: MGRS → UTM → широта/довгота → відстань (WGS84) ===== */
+const MGRS_COL='ABCDEFGHJKLMNPQRSTUVWXYZ',MGRS_ROW='ABCDEFGHJKLMNPQRSTUV';
+// мінімальна північна координата широтної смуги, м (як у NGA / mgrs.js)
+const MGRS_MIN_N={C:1100000,D:2000000,E:2800000,F:3700000,G:4600000,H:5500000,J:6400000,K:7300000,L:8200000,M:9100000,
+  N:0,P:800000,Q:1700000,R:2600000,S:3500000,T:4400000,U:5300000,V:6200000,W:7000000,X:7900000};
+function parseMgrs(str){
+  const s=String(str||'').toUpperCase().replace(/\s+/g,'');
+  const m=s.match(/^(\d{1,2})([C-HJ-NP-X])([A-HJ-NP-Z])([A-HJ-NP-V])(\d{2,10})$/);
+  if(!m)return null;
+  const zone=+m[1],band=m[2],dig=m[5];
+  if(zone<1||zone>60||dig.length%2)return null;
+  const k=dig.length/2,mult=Math.pow(10,5-k);
+  const ci=MGRS_COL.indexOf(m[3])-((zone-1)%3)*8;
+  if(ci<0||ci>7)return null;                         // літера стовпця не з цієї зони
+  let ri=MGRS_ROW.indexOf(m[4]);
+  if(zone%2===0)ri=(ri+15)%20;                        // у парних зонах рядки зсунуті на 5 літер
+  let northing=ri*100000+(+dig.slice(k))*mult;
+  while(northing<MGRS_MIN_N[m[2]])northing+=2000000;
+  return {zone,band:m[2],south:m[2]<'N',easting:(ci+1)*100000+(+dig.slice(0,k))*mult,northing,
+    text:`${zone}${m[2]} ${m[3]}${m[4]} ${dig.slice(0,k)} ${dig.slice(k)}`};
+}
+function utmToLatLon(zone,south,E,N){
+  const a=6378137,f=1/298.257223563,k0=0.9996,e2=f*(2-f),ep2=e2/(1-e2);
+  const x=E-500000,y=south?N-10000000:N;
+  const mu=y/k0/(a*(1-e2/4-3*e2*e2/64-5*e2*e2*e2/256));
+  const e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  const fp=mu+(3*e1/2-27*e1**3/32)*Math.sin(2*mu)+(21*e1*e1/16-55*e1**4/32)*Math.sin(4*mu)
+    +(151*e1**3/96)*Math.sin(6*mu)+(1097*e1**4/512)*Math.sin(8*mu);
+  const sf=Math.sin(fp),cf=Math.cos(fp),tf=Math.tan(fp);
+  const C1=ep2*cf*cf,T1=tf*tf,w=1-e2*sf*sf,N1=a/Math.sqrt(w),R1=a*(1-e2)/Math.pow(w,1.5),D=x/(N1*k0);
+  const lat=fp-(N1*tf/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*ep2)*D**4/24+(61+90*T1+298*C1+45*T1*T1-252*ep2-3*C1*C1)*D**6/720);
+  const lon=(D-(1+2*T1+C1)*D**3/6+(5-2*C1+28*T1-3*C1*C1+8*ep2+24*T1*T1)*D**5/120)/cf;
+  return {lat:lat*180/Math.PI,lon:zone*6-183+lon*180/Math.PI};
+}
+// відстань між точками до ~100 км: площина з радіусами кривини еліпсоїда в середній широті (похибка — метри)
+function geoDistKm(p,q){
+  const a=6378137,e2=0.0066943799901414,rad=Math.PI/180,phm=(p.lat+q.lat)/2*rad;
+  const w=Math.sqrt(1-e2*Math.sin(phm)**2),M=a*(1-e2)/(w*w*w),Nr=a/w;
+  const dy=(q.lat-p.lat)*rad*M,dx=(q.lon-p.lon)*rad*Nr*Math.cos(phm);
+  return Math.sqrt(dx*dx+dy*dy)/1000;
+}
+function mgrsDistKm(a,b){
+  const A=parseMgrs(a),B=parseMgrs(b);
+  if(!A||!B)return null;
+  return geoDistKm(utmToLatLon(A.zone,A.south,A.easting,A.northing),utmToLatLon(B.zone,B.south,B.easting,B.northing));
+}
+// поле «Відстань до цілі»: рахується з квадрата, якщо в «Мої дані» вказано свою точку
+let distManual=false;   // вписано руками — зміна квадрата її не переписує
+function calcDist(force){
+  const inp=document.getElementById('f-dist'),hint=document.getElementById('f-dist-hint');
+  const grid=document.getElementById('f-grid').value.trim();
+  const pt=S.settings.myPoint;
+  if(!pt){hint.textContent=force?'Вкажи свою точку в «Мої дані» — тоді відстань рахуватиметься сама':'';return;}
+  if(!grid){if(force)hint.textContent='Спершу впиши квадрат цілі';return;}
+  if(!force&&(distManual||editId))return;             // старі вильоти й ручне значення — тільки кнопкою ↻
+  const d=mgrsDistKm(pt,grid);
+  if(d===null){hint.textContent=(force||grid.replace(/\s/g,'').length>=13)?'Квадрат не схожий на MGRS — відстань не порахувалась':'';return;}
+  if(d>100){hint.innerHTML=`<span style="color:var(--amber)">⚠ Виходить ${d.toFixed(1)} км — перевір квадрат або свою точку</span>`;return;}
+  inp.value=d.toFixed(1);distManual=false;
+  hint.textContent=`порахувано з квадрата: ${d.toFixed(1)} км`;
+}
+document.getElementById('f-grid').addEventListener('input',()=>calcDist(false));
+document.getElementById('f-dist').addEventListener('input',()=>{distManual=true;document.getElementById('f-dist-hint').textContent='';});
 let pendingLosses=[];
 function addLoss(){
   const v=document.getElementById('f-loss').value.trim();
@@ -1805,6 +1914,14 @@ function saveFlight(){
   const rdist=document.getElementById('f-res-dist').value.trim();
   if(rdist)res=res+' ('+rdist+')';
   if(!t1||!t2){toast('Вкажи час зльоту і посадки');return;}
+  // відстань до цілі — тільки для статистики, у звіт не йде
+  const distRaw=document.getElementById('f-dist').value.trim().replace(',','.');
+  let distKm=null;
+  if(distRaw){
+    const v=parseFloat(distRaw);
+    if(!/^\d+(\.\d+)?$/.test(distRaw)||!(v>0&&v<=200)){toast('Відстань до цілі — число в км, напр. 8.5');return;}
+    distKm=Math.round(v*10)/10;
+  }
   if(!droneId){toast('Обери дрон зі складу');return;}
   const drone=S.drones.find(i=>i.id===droneId);
   const ammo=ammoId?S.ammo.find(i=>i.id===ammoId):null;
@@ -1868,6 +1985,7 @@ function saveFlight(){
     ammoId:allAmmo[0]?allAmmo[0].id:'',ammoName:allAmmo[0]?allAmmo[0].name:'',ammoQty:allAmmo[0]?allAmmo[0].qty:0,
     target,grid,result:res,loss,losses:lossList};
   if(allAmmo.length>1)f.ammoExtra=allAmmo.slice(1).map(a=>({id:a.id,name:a.name,qty:a.qty}));
+  if(distKm!==null)f.distKm=distKm;
   if(settled)f.settled=1;
   if(editId){const i=S.flights.findIndex(x=>x.id===editId);if(i>=0)S.flights[i]=f;else S.flights.push(f);editId=null;
     document.getElementById('f-cancel').style.display='none';
@@ -1895,7 +2013,8 @@ function restoreStock(f,why){
   if(rb.length)logStock('повернуто на склад','flight',rb.join(' · '),0,why||'видалення вильоту');
 }
 function clearForm(){
-  ['f-t1','f-t2','f-target','f-grid','f-loss','f-res-c','f-res-dist','f-noret'].forEach(i=>document.getElementById(i).value='');
+  ['f-t1','f-t2','f-target','f-grid','f-dist','f-loss','f-res-c','f-res-dist','f-noret'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('f-dist-hint').textContent='';distManual=false;
   document.getElementById('f-aqty').value=1;
   document.getElementById('f-ammo-x').innerHTML='';
   document.getElementById('f-res').value='Влучання в ціль';
@@ -1921,6 +2040,8 @@ function editFlight(id){
   setAmmoRows(f,true);
   document.getElementById('f-target').value=f.target;
   document.getElementById('f-grid').value=f.grid;
+  document.getElementById('f-dist').value=f.distKm!=null?String(f.distKm):'';
+  document.getElementById('f-dist-hint').textContent='';distManual=f.distKm!=null;
   {const ll=(f.losses&&f.losses.length)?f.losses.slice():((f.loss||'').trim()&&!/^уточн/i.test(f.loss)?[f.loss.trim()]:[]);
    const lastL=ll.pop()||'';
    pendingLosses=ll;renderLossChips();
@@ -1981,6 +2102,8 @@ function dupFlight(id){
   setAmmoRows(f,false);
   document.getElementById('f-target').value=f.target||'';
   document.getElementById('f-grid').value=f.grid||'';
+  document.getElementById('f-dist').value='';document.getElementById('f-dist-hint').textContent='';distManual=false;
+  calcDist(false);   // новий виліт — відстань від поточної точки
   document.getElementById('f-loss').value='';
   pendingLosses=[];renderLossChips();
   const dsel=document.getElementById('f-res'),drd=document.getElementById('f-res-dist');
@@ -2117,7 +2240,7 @@ function renderFlights(){
   const el=document.getElementById('fly-list');
   if(!arr.length){el.innerHTML='<div class="empty">'+(q?'Нічого не знайдено':'Вильотів за цю дату немає')+'</div>';return;}
   el.innerHTML=arr.map(f=>`<div class="fl">
-    <div class="hd"><span class="tm">${q?esc(fmtDate(f.date))+' ':''}${esc(f.t1)}–${esc(f.t2)}</span><span class="badge">${esc(f.droneName)}</span></div>
+    <div class="hd"><span class="tm">${q?esc(fmtDate(f.date))+' ':''}${esc(f.t1)}–${esc(f.t2)}</span><span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${f.distKm?`<span class="badge">📏 ${f.distKm} км</span>`:''}<span class="badge">${esc(f.droneName)}</span></span></div>
     <div class="txt">${esc(flightText(f))}</div>
     <div class="acts">
       <button onclick="copyFlight('${f.id}')">📋 Копіювати</button>
@@ -2459,6 +2582,7 @@ function renderStats(){
   const lossDurs=durs.filter(x=>/обрив|втрата керування|реб/i.test(x.f.result)).map(x=>x.d);
   const avg=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
   const ah=avg(hitDurs),al=avg(lossDurs);
+  const dl=arr.filter(f=>f.distKm>0).map(f=>f.distKm);   // відстані до цілі (тільки де вказано)
   document.getElementById('stats-cards').innerHTML=`
     <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів${shareStr}</div></div>
     <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})${areaHit?`<br>з них у район: ${Math.round(areaHit/arr.length*100)}% (${areaHit})`:''}</div></div>
@@ -2468,7 +2592,9 @@ function renderStats(){
     <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт${zdurs.length?' (без ждунів)':''}</div></div>`+
     (zdurs.length?`
     <div class="stat"><div class="v">${zdurs.length}</div><div class="l">вильотів ждуном</div></div>
-    <div class="stat"><div class="v" style="font-size:20px">${hm(zTot)}</div><div class="l">час ждуном на позиції</div></div>`:'');
+    <div class="stat"><div class="v" style="font-size:20px">${hm(zTot)}</div><div class="l">час ждуном на позиції</div></div>`:'')+
+    (dl.length?`
+    <div class="stat"><div class="v" style="font-size:20px">${(dl.reduce((x,y)=>x+y,0)/dl.length).toFixed(1)} км</div><div class="l">середня відстань до цілі · макс ${Math.max(...dl).toFixed(1)} км</div></div>`:'');
   const durNote=document.getElementById('dur-note');
   if(durNote){
     const p1=(ah!==null&&al!==null)?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`:'';
@@ -2573,9 +2699,24 @@ function renderStats(){
     Object.entries(dStat).sort((a,b)=>b[1].fl-a[1].fl).map(([n,s])=>{
       const pct=s.fl?Math.round(s.hit/s.fl*100):0;
       const shr=arr.length?Math.round(s.fl/arr.length*100):0;
-      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}% влуч · ${shr}% нальоту)</span>`,sub:''}];
+      const dd=s.list.filter(f=>f.distKm>0).map(f=>f.distKm);
+      const sub=dd.length?`відстань: сер. ${(dd.reduce((x,y)=>x+y,0)/dd.length).toFixed(1)} · макс ${Math.max(...dd).toFixed(1)} км`:'';
+      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}% влуч · ${shr}% нальоту)</span>`,sub}];
     }));
 
+  // Відстань до цілі: % влучань за діапазонами (вильоти без відстані не враховуються)
+  {
+    const el=document.getElementById('stats-dist');
+    const withD=arr.filter(f=>f.distKm>0);
+    const pl=n=>n%10===1&&n%100!==11?'виліт':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'вильоти':'вильотів');
+    if(!withD.length)el.innerHTML='<div class="empty">Немає даних. Вкажи свою точку в «Мої дані» — і відстань рахуватиметься сама з квадрата</div>';
+    else el.innerHTML=[[0,5,'до 5 км'],[5,10,'5–10 км'],[10,15,'10–15 км'],[15,20,'15–20 км'],[20,1e9,'20+ км']].map(([lo,hi,l])=>{
+      const g=withD.filter(f=>f.distKm>=lo&&f.distKm<hi);if(!g.length)return '';
+      const h=g.filter(f=>/влуч|ураж/i.test(f.result)).length;
+      return `<div class="item"><div class="nm">${l}<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${g.length} ${pl(g.length)}</div></div>
+        <div class="qty" style="min-width:auto">${Math.round(h/g.length*100)}% <span style="color:var(--muted);font-size:13px">(${h}/${g.length})</span></div></div>`;
+    }).join('')+(withD.length<arr.length?`<p class="note">Без відстані: ${arr.length-withD.length} ${pl(arr.length-withD.length)} — у ці цифри не входять.</p>`:'');
+  }
   // Ефективність по БК: % влучань серед вильотів, де застосовано цей БК
   const aStat={};
   arr.forEach(f=>{
