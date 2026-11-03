@@ -92,7 +92,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.87</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.88</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -435,6 +435,19 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <button class="btn sec" onclick="dlgIntake.close()">Скасувати</button>
 </dialog>
 
+<dialog id="dlg-dist">
+  <h2 style="margin-top:0">Відстань для старих вильотів</h2>
+  <p class="note" style="margin-bottom:10px">Рахується від твоєї точки з «Мої дані». Обери період, коли літав саме з цієї точки.</p>
+  <div class="row">
+    <div><label>З дати</label><input type="date" id="dd-from"></div>
+    <div><label>По дату</label><input type="date" id="dd-to"></div>
+  </div>
+  <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13.5px;color:var(--txt)"><input type="checkbox" id="dd-all" style="width:auto;margin:0"> Перерахувати й ті, де відстань уже є</label>
+  <div id="dd-info" class="note" style="margin-top:8px"></div>
+  <button class="btn" onclick="applyDistFill()">📏 Порахувати</button>
+  <button class="btn sec" onclick="dlgDist.close()">Скасувати</button>
+</dialog>
+
 <dialog id="dlg-set">
   <h2 style="margin-top:0">Мої дані (для шапки звіту)</h2>
   <label>Підрозділ</label><input id="set-unit" placeholder="назва підрозділу">
@@ -446,6 +459,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <button type="button" class="btn sec" style="margin-top:0;flex:1" onclick="toggleMyPt()" title="Показати / сховати">👁</button>
   </div>
   <button type="button" class="btn sec" onclick="clearMyPt()">🗑 Стерти мою точку</button>
+  <button type="button" class="btn sec" onclick="openDistFill()">📏 Порахувати відстань для старих вильотів</button>
   <p class="note">Зберігається тільки в цьому телефоні: у звіти, CSV і на сайт не потрапляє. Є в резервних копіях — їх нікому не кидай.</p>
   <label>Поріг низького залишку (шт.)</label><input id="set-low" type="number" min="0" value="2" inputmode="numeric">
   <label>Скільки копій тримати в папці</label><input id="set-keep" type="number" min="1" max="10" value="3" inputmode="numeric">
@@ -457,7 +471,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <input type="file" id="imp-file" accept=".json" onchange="importData(this)">
   <button class="btn sec" onclick="forceUpdate()">🔄 Перевірити оновлення</button>
   <button class="btn sec" onclick="restoreSnapshot()">⏱ Відновити з автозбереження</button>
-  <button class="btn sec" onclick="undoImport()">↩ Відкотити останнє відновлення / приймання</button>
+  <button class="btn sec" onclick="undoImport()">↩ Відкотити останню масову зміну</button>
   <button class="btn sec" id="folder-btn" onclick="pickBackupFolder()">📁 Папка для автобекапу</button>
   <div id="folder-info" class="note"></div>
   <div id="storage-info" class="note" style="margin-top:8px"></div>
@@ -784,6 +798,56 @@ function saveSettings(){
   save();dlgSet.close();toast('Збережено');
   if(S.settings.fileBackup==='folder')cleanOldBackups(S.settings.keepBackups);
 }
+// масовий перерахунок відстані для старих вильотів (від поточної точки, за обраний період)
+const dlgDist=document.getElementById('dlg-dist');
+function distFillPlan(){
+  const pt=S.settings.myPoint;
+  let from=document.getElementById('dd-from').value,to=document.getElementById('dd-to').value;
+  if(from&&to&&from>to)[from,to]=[to,from];
+  const all=document.getElementById('dd-all').checked;
+  const p={ok:[],has:0,noGrid:0,bad:0,far:0};
+  S.flights.forEach(f=>{
+    if((from&&f.date<from)||(to&&f.date>to))return;
+    if(f.distKm>0&&!all){p.has++;return;}
+    if(!String(f.grid||'').trim()){p.noGrid++;return;}
+    const d=mgrsDistKm(pt,f.grid);
+    if(d===null){p.bad++;return;}
+    if(d>100){p.far++;return;}
+    p.ok.push([f,Math.round(d*10)/10]);
+  });
+  return p;
+}
+function renderDistFill(){
+  const p=distFillPlan(),parts=[`<b style="color:var(--accent)">Буде пораховано: ${p.ok.length}</b>`];
+  if(p.has)parts.push(`уже з відстанню: ${p.has}`);
+  if(p.noGrid)parts.push(`без квадрата: ${p.noGrid}`);
+  if(p.bad)parts.push(`квадрат не розпізнано: ${p.bad}`);
+  if(p.far)parts.push(`далі 100 км: ${p.far}`);
+  document.getElementById('dd-info').innerHTML=parts.join(' · ');
+}
+function openDistFill(){
+  if(!S.settings.myPoint){toast('Спершу вкажи свою точку і натисни «Зберегти»',3500);return;}
+  const dates=S.flights.map(f=>f.date).filter(Boolean).sort();
+  if(!dates.length){toast('Вильотів ще немає');return;}
+  const last=dates[dates.length-1],t=todayISO();
+  document.getElementById('dd-from').value=dates[0];
+  document.getElementById('dd-to').value=last>t?last:t;
+  document.getElementById('dd-all').checked=false;
+  renderDistFill();dlgDist.showModal();
+}
+['dd-from','dd-to','dd-all'].forEach(id=>document.getElementById(id).addEventListener('change',renderDistFill));
+function applyDistFill(){
+  const p=distFillPlan();
+  if(!p.ok.length){toast('Нема вильотів, для яких можна порахувати');return;}
+  const over=p.ok.filter(([f])=>f.distKm>0).length;
+  if(!confirm(`Порахувати відстань від твоєї точки для ${p.ok.length} вил.?`+(over?`\nУ ${over} з них відстань буде замінено.`:'')+
+    '\n\nРоби це, тільки якщо всі вони були саме з цієї точки.'))return;
+  savePrev();   // страховка: «↩ Відкотити останню масову зміну» поверне як було
+  p.ok.forEach(([f,d])=>{f.distKm=d;});
+  save();renderAll();renderStats();dlgDist.close();
+  const skip=p.noGrid+p.bad+p.far;
+  toast(`Пораховано: ${p.ok.length}`+(skip?` · пропущено: ${skip} (без квадрата чи з помилкою в ньому)`:''),4500);
+}
 function toggleMyPt(){document.getElementById('set-mypt').classList.toggle('mask');}
 // стерти точку: з даних і з автозбережень у телефоні (знімки, страхувальна копія)
 async function clearMyPt(){
@@ -887,7 +951,7 @@ async function undoImport(){
   let prev=await kvGet('prev');
   if(typeof prev!=='string'||!prev){try{prev=localStorage.getItem(KEY+'-prev');}catch(e){}}
   if(!prev){toast('Немає попередніх даних для відкату');return;}
-  if(!confirm('Повернути дані, які були ДО останнього відновлення з файлу або приймання позиції?'))return;
+  if(!confirm('Повернути дані, які були ДО останньої масової зміни (відновлення з файлу, приймання позиції або перерахунку відстаней)?'))return;
   let data;
   try{data=JSON.parse(prev);}catch(e){toast('⚠ Не вдалося відкотити');return;}
   S=normalizeState(data);save();renderAll();dlgSet.close();toast('Повернуто попередні дані');
