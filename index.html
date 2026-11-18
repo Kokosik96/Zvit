@@ -59,6 +59,14 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .pm{width:40px;height:40px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
   color:var(--txt);font-size:20px;flex:none}
 .del{width:40px;height:40px;border-radius:8px;background:none;border:1px solid var(--line);color:var(--red);font-size:16px;flex:none}
+/* Не БГ і Ремфонд: назва з кількістю — зверху, кнопки — окремим рядком (на вузькому екрані назва не ламається) */
+.item.two{flex-wrap:wrap;row-gap:8px}
+.item .acts2{flex-basis:100%;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.del.txt{width:auto;padding:0 10px;font-size:13px}
+.item .flt{font-size:12.5px;color:var(--amber);margin-top:3px}
+.item .flt.none{color:var(--muted);font-style:italic}
+#stock-seg button{padding:10px 4px;white-space:nowrap}
+@media (max-width:360px){#stock-seg button{padding:10px 2px;font-size:12.5px}.del.txt{padding:0 7px}.item .acts2{gap:5px}}
 .fl{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
 .fl .hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
 .fl .tm{font-family:var(--mono);color:var(--accent);font-size:15px}
@@ -92,7 +100,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.89</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.91</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -213,6 +221,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div class="seg" id="stock-seg">
     <button class="on" data-k="drones">Дрони</button>
     <button data-k="nbg">Не БГ</button>
+    <button data-k="rem">Ремфонд</button>
     <button data-k="ammo">БК</button>
     <button data-k="gear">Майно</button>
     <button data-k="fuel">Паливо</button>
@@ -231,6 +240,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <label>Серійний номер (якщо є)</label>
       <input id="s-sn" placeholder="напр. 4587-А23" style="font-family:var(--mono)">
     </div>
+    <div id="s-fault-wrap" style="display:none">
+      <label>Несправність</label>
+      <input id="s-fault" list="fault-opts" maxlength="120" placeholder="напр. немає відео, не армиться">
+      <div class="note" style="margin-top:6px">Кожен борт — окремим рядком. Додав кілька — несправність кожного міняй через ✎ на ньому.</div>
+    </div>
+    <datalist id="fault-opts"></datalist>
     <button class="btn" onclick="addStock()">✚ Додати</button>
   </div>
   <div id="fuel-cons"></div>
@@ -368,6 +383,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
         <select id="d-kind" onchange="onDelivKindChange()">
           <option value="drones">Дрони</option>
           <option value="nbg">Не БГ</option>
+          <option value="rem">Ремфонд</option>
           <option value="ammo">БК</option>
           <option value="gear">Майно</option>
           <option value="fuel">Паливо</option>
@@ -479,13 +495,15 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 </dialog>
 
 <dialog id="dlg-stock">
-  <h2 style="margin-top:0">Редагувати позицію</h2>
+  <h2 style="margin-top:0" id="e-title">Редагувати позицію</h2>
+  <p class="note" id="e-note" style="display:none;margin:0 0 4px"></p>
   <label>Назва</label><input id="e-name">
-  <div class="row">
+  <div class="row" id="e-qty-row">
     <div><label>К-сть</label><input id="e-qty" type="number" min="0" inputmode="numeric"></div>
     <div><label>Од.</label><input id="e-unit" list="unit-opts" placeholder="шт"></div>
   </div>
   <div id="e-sn-wrap"><label>Серійний номер</label><input id="e-sn" style="font-family:var(--mono)"></div>
+  <div id="e-fault-wrap" style="display:none"><label>Несправність</label><input id="e-fault" list="fault-opts" maxlength="120"></div>
   <button class="btn" onclick="saveStockEdit()">Зберегти</button>
   <button class="btn sec" onclick="dlgStock.close()">Скасувати</button>
 </dialog>
@@ -524,7 +542,7 @@ function storageInfo(){
 function normalizeState(s){
   if(!s||typeof s!=='object')s={};
   if(!s.settings||typeof s.settings!=='object')s.settings={unit:'',position:''};
-  ['flights','ammo','drones','gear','nbg','fuel','stockLog','deliveries'].forEach(k=>{if(!Array.isArray(s[k]))s[k]=[];});
+  ['flights','ammo','drones','gear','nbg','rem','fuel','stockLog','deliveries'].forEach(k=>{if(!Array.isArray(s[k]))s[k]=[];});
   return s;
 }
 
@@ -657,6 +675,8 @@ function requestPersist(){
 
 let storageWarned=false;
 function save(){
+  // ремфонд: запис без бортів (0) не тримаємо — несправність стосувалась саме тих бортів
+  if(Array.isArray(S.rem)&&S.rem.some(i=>!(i.qty>0)))S.rem=S.rem.filter(i=>i.qty>0);
   mem=S;
   try{
     const json=JSON.stringify(S);
@@ -958,7 +978,7 @@ async function undoImport(){
 }
 
 /* ===== доставка ===== */
-const KIND_LABEL={ammo:'БК',drones:'Дрони',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',other:'Інше'};
+const KIND_LABEL={ammo:'БК',drones:'Дрони',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',rem:'Ремфонд',other:'Інше'};
 function fillDelivNames(){
   const dl=document.getElementById('deliv-names');
   if(!dl)return;
@@ -968,8 +988,8 @@ function fillDelivNames(){
     (S.deliveries||[]).filter(d=>d.kind==='other').forEach(d=>set.add(d.name));
   }else{
     (S[kind]||[]).forEach(i=>set.add(i.name));
-    // для "Не БГ" підказуємо ще й назви наявних дронів
-    if(kind==='nbg')(S.drones||[]).forEach(i=>set.add(i.name));
+    // для "Не БГ" і "Ремфонду" підказуємо ще й назви наявних дронів
+    if(kind==='nbg'||kind==='rem')(S.drones||[]).forEach(i=>set.add(i.name));
     (S.deliveries||[]).filter(d=>d.kind===kind).forEach(d=>set.add(d.name));
   }
   dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b,'uk')).map(n=>`<option value="${esc(n)}"></option>`).join('');
@@ -980,7 +1000,7 @@ function onDelivKindChange(){
   inp.value='';
   const k=document.getElementById('d-kind').value;
   inp.placeholder={ammo:'напр. МОА композит 61',drones:'напр. Інквізитор 10/15 км день',
-    fuel:'напр. бензин',gear:'напр. Патч-корд',nbg:'назва дрона',other:'напр. вода'}[k]||'назва';
+    fuel:'напр. бензин',gear:'напр. Патч-корд',nbg:'назва дрона',rem:'назва дрона',other:'напр. вода'}[k]||'назва';
 }
 function addDeliv(){
   const date=document.getElementById('d-date').value||todayISO();
@@ -993,37 +1013,54 @@ function addDeliv(){
   const note=document.getElementById('d-note').value.trim();
   if(!name){toast('Введи назву');return;}
   if(!qty){toast('Вкажи кількість');return;}
-  let appliedQty=0;
+  let appliedQty=0,itemId='',warn=''; // warn — щоб попередження не перекрилось «Записано»
+  const remTaken=[];
   if(apply){
     const list=S[kind]||(S[kind]=[]);
+    const same=i=>nkey(i.name)===nkey(name);
     if(dir==='in'){
-      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn);
+      // ремфонд: борт без несправності не зливаємо з бортами, де несправність уже вказана
+      let it=kind==='rem'?list.find(i=>same(i)&&!i.sn&&!i.fault):list.find(i=>same(i)&&!i.sn);
       if(it){it.qty+=qty;}
-      else{const o={id:uid(),name,qty};if(unit!=='шт')o.unit=unit;list.push(o);}
+      else{it={id:uid(),name,qty};if(unit!=='шт')it.unit=unit;if(kind==='rem')it.fault='';list.push(it);}
+      if(kind==='rem')itemId=it.id;
       appliedQty=qty;
       logStock('доставка (приїхало)',kind,name,qty,note);
+    }else if(kind==='rem'){
+      // ремфонд: борти з різними несправностями — різні записи; списуємо по черзі, спершу борти без несправності
+      const cands=list.filter(i=>same(i)&&i.qty>0).sort((a,b)=>(a.fault?1:0)-(b.fault?1:0));
+      if(!cands.length){warn='«'+name+'» немає в ремфонді — записано без списання';}
+      else{
+        let left=qty;
+        for(const it of cands){if(!left)break;const t=Math.min(it.qty,left);it.qty-=t;left-=t;remTaken.push({fault:it.fault||'',qty:t});}
+        appliedQty=qty-left;
+        logStock('доставка (виїхало)',kind,name,-appliedQty,note);
+        if(left)warn=`Записано. У ремфонді було ${appliedQty} — списано ${appliedQty}`;
+      }
     }else{
       // шукаємо будь-яку позицію з такою назвою (з серійником теж)
-      let it=list.find(i=>nkey(i.name)===nkey(name)&&!i.sn)
-           ||list.find(i=>nkey(i.name)===nkey(name));
-      if(!it){toast('«'+name+'» немає на складі — записано без списання');}
+      let it=list.find(i=>same(i)&&!i.sn)||list.find(same);
+      if(!it){warn='«'+name+'» немає на складі — записано без списання';}
       else{
         const take=Math.min(it.qty,qty);
         it.qty-=take;appliedQty=take;
         logStock('доставка (виїхало)',kind,name,-take,note);
-        if(take<qty)toast(`На складі було ${take} — списано ${take}`);
+        if(take<qty)warn=`Записано. На складі було ${take} — списано ${take}`;
       }
     }
   }
   if(!S.deliveries)S.deliveries=[];
-  S.deliveries.unshift({id:uid(),date,dir,kind,name,qty,unit,note,applied:apply,appliedQty});
+  const rec={id:uid(),date,dir,kind,name,qty,unit,note,applied:apply,appliedQty};
+  if(itemId)rec.itemId=itemId; // ремфонд, приїхало: точно знаємо, який запис чіпали (для відкату)
+  if(remTaken.length)rec.remTaken=remTaken; // ремфонд, виїхало: які саме борти (несправності) списано — для відкату
+  S.deliveries.unshift(rec);
   if(S.deliveries.length>DELIV_MAX)S.deliveries.length=DELIV_MAX;
   document.getElementById('d-name').value='';
   document.getElementById('d-qty').value=1;
   document.getElementById('d-unit').value='';
   document.getElementById('d-note').value='';
   save();renderDeliv();renderStock();fillSelects();
-  toast(dir==='in'?'Записано: приїхало':'Записано: виїхало');
+  if(warn)toast(warn,4000);else toast(dir==='in'?'Записано: приїхало':'Записано: виїхало');
 }
 function delDeliv(id){
   const d=(S.deliveries||[]).find(x=>x.id===id);if(!d)return;
@@ -1035,11 +1072,19 @@ function delDeliv(id){
   if(!confirm(`Видалити запис «${d.name} — ${d.qty} ${d.unit||'шт'}»?${back}`))return;
   if(roll&&d.kind!=='other'){
     const list=S[d.kind]||[];
-    const it=list.find(i=>nkey(i.name)===nkey(d.name)&&!i.sn)
-           ||list.find(i=>nkey(i.name)===nkey(d.name));
-    if(it){
-      if(d.dir==='in'){it.qty=Math.max(0,it.qty-aq);logStock('відкат доставки',d.kind,d.name,-aq,'видалення запису');}
-      else{it.qty+=aq;logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');}
+    if(d.kind==='rem'&&d.dir==='out'&&Array.isArray(d.remTaken)){
+      // ремфонд: повертаємо ті самі борти з тими самими несправностями
+      d.remTaken.forEach(t=>{if(t&&t.qty>0)remAdd(d.name,t.qty,cleanFault(t.fault));});
+      logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');
+    }else{
+      // ремфонд (приїхало): відкочуємо саме той запис, який міняли (у різних бортів однакова назва, але різні несправності)
+      const it=d.itemId?list.find(i=>i.id===d.itemId)
+             :list.find(i=>nkey(i.name)===nkey(d.name)&&!i.sn)
+             ||list.find(i=>nkey(i.name)===nkey(d.name));
+      if(it){
+        if(d.dir==='in'){it.qty=Math.max(0,it.qty-aq);logStock('відкат доставки',d.kind,d.name,-aq,'видалення запису');}
+        else{it.qty+=aq;logStock('відкат доставки',d.kind,d.name,aq,'видалення запису');}
+      }
     }
   }
   S.deliveries=S.deliveries.filter(x=>x.id!==id);
@@ -1087,7 +1132,7 @@ function buildDelivReport(date){
   lines.push('');
   if(!arr.length){lines.push('Рухів не було.');return lines.join('\n');}
   // порядок і назви категорій у звіті
-  const CATS=[['drones','Дрони'],['nbg','Не БГ дрони'],['ammo','БК'],['gear','Майно'],['fuel','Паливо'],['other','Інше']];
+  const CATS=[['drones','Дрони'],['nbg','Не БГ дрони'],['rem','Ремфонд'],['ammo','БК'],['gear','Майно'],['fuel','Паливо'],['other','Інше']];
   const line=d=>`• ${d.name} - ${d.qty} ${d.unit||'шт'}.${d.note?' ('+d.note+')':''}`;
   const section=(title,list)=>{
     lines.push(title);
@@ -1112,7 +1157,7 @@ function buildDelivReport(date){
   return lines.join('\n');
 }
 // звіт доставки за період: однакові позиції підсумовуються
-const DELIV_CATS=[['drones','Дрони'],['nbg','Не БГ дрони'],['ammo','БК'],['gear','Майно'],['fuel','Паливо'],['other','Інше']];
+const DELIV_CATS=[['drones','Дрони'],['nbg','Не БГ дрони'],['rem','Ремфонд'],['ammo','БК'],['gear','Майно'],['fuel','Паливо'],['other','Інше']];
 function buildDelivPeriodReport(lo,hi){
   const arr=(S.deliveries||[]).filter(d=>d.date>=lo&&d.date<=hi);
   let lines=[];
@@ -1163,12 +1208,12 @@ function exportDelivPeriod(){
 
 /* ===== приймання позиції ===== */
 const dlgIntake=document.getElementById('dlg-intake');
-const INTAKE_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['ammo','БК'],['gear','Майно'],['fuel','Паливо']];
+const INTAKE_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['rem','Ремфонд'],['ammo','БК'],['gear','Майно'],['fuel','Паливо']];
 // рядки екрана приймання: позиції складу (id) і нові зі списку (id=null); cur — було, qty — пропонується
 let intakeRows=[],intakeImp=null; // intakeImp — розібраний список (null = ручний режим)
 function intakeRowsFromStock(){
   const rows=[];
-  INTAKE_KINDS.forEach(([k])=>(S[k]||[]).forEach(i=>rows.push({kind:k,id:i.id,name:i.name,sn:i.sn||'',unit:i.unit||'',cur:i.qty,qty:i.qty,matched:false})));
+  INTAKE_KINDS.forEach(([k])=>(S[k]||[]).forEach(i=>rows.push({kind:k,id:i.id,name:i.name,sn:i.sn||'',fault:i.fault||'',unit:i.unit||'',cur:i.qty,qty:i.qty,matched:false})));
   return rows;
 }
 function openIntake(){
@@ -1184,7 +1229,7 @@ function toggleIntakeImport(){
 function intakeHint(r,v){
   if(r.id===null)return v>0?'<span style="color:var(--green)">нове</span>':'<span style="color:var(--amber)">нове, але 0 — не додаватиметься</span>';
   if(v===r.cur)return '';
-  if(v===0)return `<span style="color:var(--amber)">${intakeImp&&!r.matched?'нема у списку — ':''}стане 0 (було ${r.cur})</span>`;
+  if(v===0)return `<span style="color:var(--amber)">${intakeImp&&!r.matched?'нема у списку — ':''}${r.kind==='rem'?'прибрати з ремфонду':'стане 0'} (було ${r.cur})</span>`;
   return `було ${r.cur}`;
 }
 function renderIntakeBody(){
@@ -1200,7 +1245,7 @@ function renderIntakeBody(){
     idx.forEach(i=>{
       const r=intakeRows[i];
       html+=`<div class="item" style="padding:8px 10px">
-        <div class="nm" style="font-size:14px">${esc(r.name)}${r.sn?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">SN: ${esc(r.sn)}</div>`:''}<div class="ih" style="font-size:11.5px;color:var(--muted)">${intakeHint(r,r.qty)}</div></div>
+        <div class="nm" style="font-size:14px">${esc(r.name)}${r.sn?`<div style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">SN: ${esc(r.sn)}</div>`:''}${r.fault?`<div style="font-size:11.5px;color:var(--amber)">⚠ ${esc(r.fault)}</div>`:''}<div class="ih" style="font-size:11.5px;color:var(--muted)">${intakeHint(r,r.qty)}</div></div>
         <input class="intake-q" data-idx="${i}" type="number" min="0" inputmode="numeric"
           value="${r.qty}" style="width:76px;text-align:center;padding:8px">
         <span style="font-size:12px;color:var(--muted)">${esc(r.unit||(k==='fuel'?'л':'шт'))}</span>
@@ -1225,7 +1270,7 @@ function intakeZeroAll(){
 function intakeKeepAll(){intakeImp=null;intakeRows=intakeRowsFromStock();renderIntakeSum();renderIntakeBody();}
 
 // --- розбір списку: формат «Звіту по наявності» (розділи + рядки «•Назва - 5 шт.») і схожі ---
-const INTAKE_SECTIONS=[[/не\s*-?\s*бг/,'nbg'],[/дрон|fpv|фпв|крил/,'drones'],
+const INTAKE_SECTIONS=[[/не\s*-?\s*бг/,'nbg'],[/рем(?:онтний)?\.?\s*-?\s*фонд/,'rem'],[/дрон|fpv|фпв|крил/,'drones'],
   [/^бк(?![а-яіїєґ])|^б\/к|боєприпас|набо[їі]/,'ammo'],[/обладнан|майно/,'gear'],[/палив|пальне|пмм/,'fuel']];
 const RE_QTY_SEP=/^(.*\S)(?:\s+[-–—=]\s*|\s*[-–—=]\s+|\s*:\s*)(\d+(?:[.,]\d+)?)\s*([a-zа-яіїєґ'’]{0,10})\.?\s*$/i;
 const RE_QTY_UNIT=/^(.*\S)\s+(\d+(?:[.,]\d+)?)\s*(шт|л|уп|кг|компл|к-т|пар|ящ|од)\.?\s*$/i;
@@ -1272,6 +1317,16 @@ function parseStockItem(s,kind){
   if(!Number.isInteger(qty)){warn=`«${name}»: ${q} → ${Math.round(qty)} (склад рахує цілими)`;qty=Math.round(qty);}
   return {kind,name,sn,qty,unit:intakeUnit(unit,kind),warn};
 }
+// ремфонд: «Назва - 1 шт. (несправність)» — дужки одразу після кількості й до кінця рядка = несправність
+// (дужки в самій назві чи всередині несправності не заважають: беремо першу «(», перед якою вже є кількість)
+function splitFault(s){
+  if(!/\)\s*$/.test(s))return null;
+  for(let p=s.indexOf('(');p>0;p=s.indexOf('(',p+1)){
+    const rest=s.slice(0,p).trim();
+    if(intakeHasQty(rest))return {rest,fault:cleanFault(s.slice(p+1).replace(/\)\s*$/,''))};
+  }
+  return null;
+}
 function parseStockText(text){
   const items=[],bad=[],warn=[];let kind=null,position='';
   const lines=String(text||'').replace(/^﻿/,'').replace(/\r/g,'').replace(/ /g,' ').split('\n');
@@ -1279,10 +1334,12 @@ function parseStockText(text){
     const line=raw.trim();
     if(!line)continue;
     if(/^[─━—–\-_=*·.~]{3,}$/.test(line))continue;        // роздільник «───»
-    const s=line.replace(RE_BULLET,'').trim();
+    let s=line.replace(RE_BULLET,'').trim();
     if(!s||/^[—–\-]+$/.test(s))continue;                  // «•—» — порожній розділ
     const pm=s.match(/^позиці[яї](?:\s+бпла)?\s*[:\-–—]\s*(.+)$/i);
     if(pm){position=pm[1].replace(/^[«"“'„]+|[»"”']+$/g,'').trim();continue;}
+    let fault='';
+    if(kind==='rem'){const sf=splitFault(s);if(sf){s=sf.rest;fault=sf.fault;}}
     if(!intakeHasQty(s)&&!RE_SN.test(s)){
       const k=intakeSection(s);
       if(k){kind=k;continue;}
@@ -1294,6 +1351,7 @@ function parseStockText(text){
     if(it.skip)continue;
     if(it.err){bad.push(line+'  ← '+it.err);continue;}
     if(it.warn)warn.push(it.warn);
+    if(kind==='rem')it.fault=fault;
     delete it.warn;items.push(it);
   }
   return {items,bad,warn,position};
@@ -1302,8 +1360,9 @@ const snKey=s=>String(s||'').replace(/\s+/g,'').toUpperCase();
 // приймаємо саме список: що є у списку — та кількість, чого нема — 0 (назва лишається), нове — додати
 function mergeIntake(rows,items){
   const agg=new Map();
+  // у ремфонді той самий дрон з різними несправностями — різні записи
   items.forEach(it=>{
-    const key=it.kind+'|'+nkey(it.name)+'|'+snKey(it.sn);
+    const key=it.kind+'|'+nkey(it.name)+'|'+snKey(it.sn)+'|'+nkey(it.fault);
     const a=agg.get(key);
     if(a)a.qty+=it.qty;else agg.set(key,{...it});
   });
@@ -1311,9 +1370,9 @@ function mergeIntake(rows,items){
   for(const it of agg.values()){
     const sk=snKey(it.sn);
     let r=sk?rows.find(x=>!x.matched&&x.id!==null&&x.kind===it.kind&&snKey(x.sn)===sk):null;
-    if(!r)r=rows.find(x=>!x.matched&&x.id!==null&&x.kind===it.kind&&nkey(x.name)===nkey(it.name)&&snKey(x.sn)===sk);
+    if(!r)r=rows.find(x=>!x.matched&&x.id!==null&&x.kind===it.kind&&nkey(x.name)===nkey(it.name)&&snKey(x.sn)===sk&&nkey(x.fault)===nkey(it.fault));
     if(r){r.matched=true;r.qty=it.qty;r.unit=it.unit;}
-    else rows.push({kind:it.kind,id:null,name:it.name,sn:it.sn||'',unit:it.unit||'',cur:0,qty:it.qty,matched:true});
+    else rows.push({kind:it.kind,id:null,name:it.name,sn:it.sn||'',fault:it.fault||'',unit:it.unit||'',cur:0,qty:it.qty,matched:true});
   }
   return rows;
 }
@@ -1388,10 +1447,14 @@ function applyIntake(){
   add.forEach(a=>{
     const it={id:uid(),name:a.r.name,qty:a.to};
     if(a.r.sn)it.sn=a.r.sn;
+    if(a.r.kind==='rem')it.fault=a.r.fault||'';
     intakeSetUnit(it,a.r.unit);
     S[a.r.kind].push(it);
-    logStock('  ↳ приймання (нове)',a.r.kind,it.name,a.to,`стало ${a.to}`);
+    logStock('  ↳ приймання (нове)',a.r.kind,it.name,a.to,`стало ${a.to}${it.fault?' · '+it.fault:''}`);
   });
+  // ремфонд: борти, яких більше нема, прибираємо зовсім — несправність стосувалась саме їх, назву з нулем тримати нема сенсу
+  const remGone=new Set(chg.filter(c=>c.r.kind==='rem'&&c.to===0).map(c=>c.it.id));
+  if(remGone.size)S.rem=S.rem.filter(i=>!remGone.has(i.id));
   if(setPos)S.settings.position=setPos;
   // вильоти й доставки до цього моменту більше не рухають склад: його щойно перераховано
   S.flights.forEach(f=>{f.settled=1;});
@@ -1459,15 +1522,45 @@ document.getElementById('stock-seg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;stockKind=b.dataset.k;
   document.querySelectorAll('#stock-seg button').forEach(x=>x.classList.toggle('on',x===b));
   document.getElementById('s-sn-wrap').style.display=stockKind==='gear'?'block':'none';
+  document.getElementById('s-fault-wrap').style.display=stockKind==='rem'?'block':'none';
   renderStock();
 });
+// несправність борта в ремфонді: один рядок, без зайвих пробілів (іде у звіт у дужках)
+function cleanFault(s){return String(s||'').replace(/\s+/g,' ').trim().slice(0,120);}
+// у ремфонд: той самий дрон з тією самою несправністю — додаємо до наявного запису, інакше — новий
+function remAdd(name,qty,fault){
+  const ex=S.rem.find(i=>nkey(i.name)===nkey(name)&&nkey(i.fault)===nkey(fault));
+  if(ex)ex.qty+=qty;else S.rem.push({id:uid(),name,qty,fault});
+}
+function fillFaultOpts(){
+  const dl=document.getElementById('fault-opts');if(!dl)return;
+  const set=new Map();
+  (S.rem||[]).forEach(i=>{const f=cleanFault(i.fault);if(f&&!set.has(nkey(f)))set.set(nkey(f),f);});
+  dl.innerHTML=[...set.values()].sort((a,b)=>a.localeCompare(b,'uk')).map(f=>`<option value="${esc(f)}"></option>`).join('');
+}
 function addStock(){
   const n=document.getElementById('s-name').value.trim().replace(/\s+/g,' ');
   const q=Math.max(0,parseInt(document.getElementById('s-qty').value)||0);
   const sn=stockKind==='gear'?document.getElementById('s-sn').value.trim():'';
   const unit=(document.getElementById('s-unit').value.trim()||(stockKind==='fuel'?'л':'шт')).replace(/\.$/,'');
   if(!n){toast('Введи назву');return;}
-  if(stockKind==='nbg'){
+  if(stockKind==='rem'){
+    // ремфонд: борти з дронів у наявності, у кожного своя несправність
+    const fault=cleanFault(document.getElementById('s-fault').value);
+    if(!fault){toast('Вкажи несправність');document.getElementById('s-fault').focus();return;}
+    const qty=q||1;
+    const drone=S.drones.find(i=>nkey(i.name)===nkey(n));
+    if(drone){
+      const take=Math.min(drone.qty,qty);
+      drone.qty-=take;
+      logStock('переведено в ремфонд','drones',drone.name,-take,fault);
+      if(take<qty)toast(`У наявності було лише ${take} — переведено ${take}`);
+    }else{
+      logStock('додано в ремфонд','drones',n,0,'не знайдено серед наявних · '+fault);
+    }
+    remAdd(drone?drone.name:n,qty,fault);
+    document.getElementById('s-fault').value='';
+  }else if(stockKind==='nbg'){
     const qty=q||1;
     const drone=S.drones.find(i=>nkey(i.name)===nkey(n));
     if(drone){
@@ -1516,6 +1609,51 @@ function nbgReturn(id){
   if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
   save();renderStock();fillSelects();toast('Повернуто в стрій: '+it.name);
 }
+// Не БГ → Ремфонд: по одному борту, з несправністю
+function nbgToRem(id){
+  const it=S.nbg.find(i=>i.id===id);if(!it||it.qty<1)return;
+  const ans=prompt(`«${it.name}» → Ремфонд (1 шт. з ${it.qty}).\nЯка несправність?`);
+  if(ans===null)return;
+  const fault=cleanFault(ans);
+  if(!fault){toast('Вкажи несправність — без неї не переношу');return;}
+  it.qty--;
+  remAdd(it.name,1,fault);
+  logStock('не БГ → ремфонд','drones',it.name,0,fault);
+  if(it.qty===0)S.nbg=S.nbg.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();toast('У ремфонд: '+it.name);
+}
+/* ===== ремфонд: борти з несправностями ===== */
+function remReturn(id){
+  const it=S.rem.find(i=>i.id===id);if(!it||it.qty<1)return;
+  it.qty--;
+  const drone=S.drones.find(i=>nkey(i.name)===nkey(it.name));
+  if(drone)drone.qty++;else S.drones.push({id:uid(),name:it.name,qty:1});
+  logStock('повернуто в стрій','drones',it.name,1,'з ремфонду'+(it.fault?': '+it.fault:''));
+  if(it.qty===0)S.rem=S.rem.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();toast('Повернуто в стрій: '+it.name);
+}
+function remToTech(id){
+  const it=S.rem.find(i=>i.id===id);if(!it||it.qty<1)return;
+  if(!confirm(`Передати «${it.name}»${it.fault?' ('+it.fault+')':''} технікам? (1 шт. з ${it.qty})`))return;
+  it.qty--;
+  logStock('передано на технічку','drones',it.name,-1,'з ремфонду'+(it.fault?': '+it.fault:''));
+  // фіксуємо у доставці (без повторного списання — воно вже зроблено вище)
+  if(!S.deliveries)S.deliveries=[];
+  S.deliveries.unshift({id:uid(),date:todayISO(),dir:'out',kind:'rem',
+    name:it.name,qty:1,unit:'шт',note:'на технічку'+(it.fault?' — '+it.fault:''),applied:false});
+  if(S.deliveries.length>DELIV_MAX)S.deliveries.length=DELIV_MAX;
+  if(it.qty===0)S.rem=S.rem.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();renderDeliv();toast('Передано технікам: '+it.name);
+}
+function remToNbg(id){
+  const it=S.rem.find(i=>i.id===id);if(!it||it.qty<1)return;
+  it.qty--;
+  const ex=S.nbg.find(i=>nkey(i.name)===nkey(it.name));
+  if(ex)ex.qty++;else S.nbg.push({id:uid(),name:it.name,qty:1});
+  logStock('ремфонд → не БГ','drones',it.name,0,it.fault||'');
+  if(it.qty===0)S.rem=S.rem.filter(i=>i.id!==id);
+  save();renderStock();fillSelects();toast('У не БГ: '+it.name);
+}
 function chQty(kind,id,d){
   const it=S[kind].find(i=>i.id===id);if(!it)return;
   const old=it.qty;
@@ -1542,8 +1680,8 @@ function bulkQty(kind,id){
 function delStock(kind,id){
   const it=S[kind].find(i=>i.id===id);
   if(!it)return;
-  if(!confirm('Видалити «'+it.name+'» зі складу?'))return;
-  logStock('видалено з обліку',kind,it.name,-it.qty,it.sn?'SN: '+it.sn:'');
+  if(!confirm('Видалити «'+it.name+'»'+(it.fault?' ('+it.fault+')':'')+' зі складу?'))return;
+  logStock('видалено з обліку',kind,it.name,-it.qty,it.sn?'SN: '+it.sn:(it.fault||''));
   S[kind]=S[kind].filter(i=>i.id!==id);save();renderStock();fillSelects();
 }
 let editStockRef=null;
@@ -1556,7 +1694,39 @@ function editStock(kind,id){
   document.getElementById('e-unit').value=it.unit||'';
   document.getElementById('e-sn').value=it.sn||'';
   document.getElementById('e-sn-wrap').style.display=kind==='gear'?'block':'none';
+  document.getElementById('e-fault').value=it.fault||'';
+  // ремфонд: правимо один конкретний борт (без кількості й одиниць)
+  const rem=kind==='rem';
+  document.getElementById('e-fault-wrap').style.display=rem?'block':'none';
+  document.getElementById('e-qty-row').style.display=rem?'none':'flex';
+  document.getElementById('e-title').textContent=rem?'Борт у ремфонді':'Редагувати позицію';
+  const note=document.getElementById('e-note');
+  note.textContent=rem&&it.qty>1?`Зміниться лише цей борт (таких самих у ремфонді ще ${it.qty-1}).`:'';
+  note.style.display=note.textContent?'block':'none';
+  if(rem)fillFaultOpts();
   dlgStock.showModal();
+}
+// ремфонд, ✎ на борті: однакові борти (та сама назва й несправність) в даних — один запис з кількістю,
+// тож змінений борт відокремлюємо від них або доливаємо до таких самих
+function remSaveEdit(it,n){
+  const f=cleanFault(document.getElementById('e-fault').value);
+  if(nkey(n)===nkey(it.name)&&nkey(f)===nkey(it.fault)){it.name=n;it.fault=f;} // лише написання (регістр, пробіли)
+  else{
+    if(nkey(n)!==nkey(it.name))logStock('перейменовано','rem',n,0,'було: '+it.name);
+    if(nkey(f)!==nkey(it.fault))logStock('несправність змінено','rem',n,0,`${it.fault||'—'} → ${f||'—'}`);
+    const ex=S.rem.find(x=>x!==it&&nkey(x.name)===nkey(n)&&nkey(x.fault)===nkey(f));
+    if(it.qty>1){it.qty--;if(ex)ex.qty++;else S.rem.push({id:uid(),name:n,qty:1,fault:f});}
+    else if(ex){ex.qty++;it.qty=0;}            // такий борт уже є — зливаємо (порожній запис прибере save)
+    else{it.name=n;it.fault=f;}
+  }
+  save();dlgStock.close();renderStock();toast('Збережено');
+}
+function remDel(id){
+  const it=S.rem.find(i=>i.id===id);if(!it||it.qty<1)return;
+  if(!confirm(`Видалити борт «${it.name}»${it.fault?' ('+it.fault+')':''} з ремфонду?`))return;
+  it.qty--;
+  logStock('видалено з обліку','rem',it.name,-1,it.fault||'');
+  save();renderStock();fillSelects();
 }
 function saveStockEdit(){
   if(!editStockRef)return;
@@ -1564,6 +1734,7 @@ function saveStockEdit(){
   const it=S[kind].find(i=>i.id===id);if(!it)return;
   const n=document.getElementById('e-name').value.trim().replace(/\s+/g,' ');
   if(!n){toast('Назва не може бути порожньою');return;}
+  if(kind==='rem'){remSaveEdit(it,n);return;}
   const oldName=it.name;
   const oldQty=it.qty;
   it.name=n;
@@ -1583,16 +1754,16 @@ function saveStockEdit(){
   }
   save();dlgStock.close();renderStock();fillSelects();renderFlights();toast('Збережено');
 }
-const STOCK_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['ammo','БК'],['gear','Майно'],['fuel','Паливо']];
-// пошук по всіх категоріях складу (назва + серійник)
+const STOCK_KINDS=[['drones','Дрони'],['nbg','Не БГ'],['rem','Ремфонд'],['ammo','БК'],['gear','Майно'],['fuel','Паливо']];
+// пошук по всіх категоріях складу (назва + серійник + несправність у ремфонді)
 function renderStockSearch(q,el){
   const res=[];
   STOCK_KINDS.forEach(([k,label])=>(S[k]||[]).forEach(i=>{
-    if(nkey(i.name+' '+(i.sn||'')).includes(q))res.push({k,label,i});
+    if(nkey(i.name+' '+(i.sn||'')+' '+(i.fault||'')).includes(q))res.push({k,label,i});
   }));
   if(!res.length){el.innerHTML='<div class="empty">Нічого не знайдено</div>';return;}
   el.innerHTML=`<div class="note" style="margin:0 0 6px">Знайдено: ${res.length}</div>`+res.map(({k,label,i})=>`<div class="item">
-    <div class="nm">${esc(i.name)}<div style="font-size:12px;color:var(--muted);margin-top:2px">${label}${i.sn?' · SN: '+esc(i.sn):''}</div></div>
+    <div class="nm">${esc(i.name)}<div style="font-size:12px;color:var(--muted);margin-top:2px">${label}${i.sn?' · SN: '+esc(i.sn):''}${i.fault?' · '+esc(i.fault):''}</div></div>
     <div class="qty" onclick="bulkQty('${k}','${i.id}')" style="cursor:pointer;text-decoration:underline dotted var(--muted)">${i.qty}${i.unit?`<span style="font-size:11px;color:var(--muted)"> ${esc(i.unit)}</span>`:``}</div>
     <button class="del" style="color:var(--muted)" onclick="editStock('${k}','${i.id}')">✎</button>
   </div>`).join('');
@@ -1600,11 +1771,15 @@ function renderStockSearch(q,el){
 function renderStock(){
   renderShiftInfo();
   if(typeof renderFuelCons==='function')renderFuelCons();
-  const arr=S[stockKind].slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
+  // ремфонд — за назвою, щоб борти одного типу з різними несправностями стояли поруч
+  const arr=stockKind==='rem'
+    ?S.rem.filter(i=>i.qty>0).sort((a,b)=>a.name.localeCompare(b.name,'uk')||String(a.fault||'').localeCompare(String(b.fault||''),'uk'))
+    :S[stockKind].slice().sort((a,b)=>b.qty-a.qty||a.name.localeCompare(b.name,'uk'));
   const el=document.getElementById('stock-list');
-  // підказка назв дронів у формі для Не БГ
+  // підказка назв дронів у формі для Не БГ і Ремфонду
   const nameInp=document.getElementById('s-name');
-  if(stockKind==='nbg'){
+  if(stockKind==='rem')fillFaultOpts();
+  if(stockKind==='nbg'||stockKind==='rem'){
     nameInp.setAttribute('list','drone-names');
     let dl=document.getElementById('drone-names');
     if(!dl){dl=document.createElement('datalist');dl.id='drone-names';document.body.appendChild(dl);}
@@ -1619,15 +1794,35 @@ function renderStock(){
   if(unitInp)unitInp.placeholder=stockKind==='fuel'?'л':'шт';
   const sq=nkey(document.getElementById('stock-search')?.value||'');
   if(sq){renderStockSearch(sq,el);return;}
-  if(!arr.length){el.innerHTML='<div class="empty">'+(stockKind==='nbg'?'Не БГ дронів немає':'Порожньо. Додай перший запис ↑')+'</div>';return;}
+  if(!arr.length){el.innerHTML='<div class="empty">'+(stockKind==='nbg'?'Не БГ дронів немає':stockKind==='rem'?'Ремфонд порожній — несправних бортів немає':'Порожньо. Додай перший запис ↑')+'</div>';return;}
+  if(stockKind==='rem'){
+    // кожен борт — окремий рядок зі своєю несправністю (у даних однакові борти — один запис з кількістю)
+    const MAX=300; // захист від «зависання» на екрані, якщо кількість випадково величезна
+    const boards=[];arr.forEach(i=>{for(let k=0;k<i.qty&&boards.length<MAX;k++)boards.push(i);});
+    const total=arr.reduce((s,i)=>s+i.qty,0);
+    el.innerHTML=`<div class="note" style="margin:0 0 6px">Бортів у ремфонді: ${total}${total>boards.length?` (показано ${boards.length})`:''}</div>`+boards.map(i=>`<div class="item two" style="border-color:var(--amber)">
+      <div class="nm">${esc(i.name)}${i.fault?`<div class="flt">⚠ ${esc(i.fault)}</div>`:`<div class="flt none">несправність не вказана — натисни ✎</div>`}</div>
+      <div class="acts2">
+        <button class="del txt" style="color:var(--green)" onclick="remReturn('${i.id}')">↩ стрій</button>
+        <button class="del txt" style="color:var(--amber)" title="Передати технікам" onclick="remToTech('${i.id}')">🔧</button>
+        <button class="del txt" style="color:var(--red)" onclick="remToNbg('${i.id}')">→ не БГ</button>
+        <button class="del" style="color:var(--muted)" title="Несправність цього борта" onclick="editStock('rem','${i.id}')">✎</button>
+        <button class="del" onclick="remDel('${i.id}')">✕</button>
+      </div>
+    </div>`).join('');
+    return;
+  }
   if(stockKind==='nbg'){
-    el.innerHTML=arr.map(i=>`<div class="item" style="border-color:var(--red)">
+    el.innerHTML=arr.map(i=>`<div class="item two" style="border-color:var(--red)">
       <div class="nm">${esc(i.name)}</div>
       <div class="qty" style="color:var(--red);cursor:pointer;text-decoration:underline dotted var(--muted)" onclick="bulkQty('nbg','${i.id}')">${i.qty}</div>
-      <button class="del" style="color:var(--green);width:auto;padding:0 8px;font-size:13px" onclick="nbgReturn('${i.id}')">↩ стрій</button>
-      <button class="del" style="color:var(--amber);width:auto;padding:0 8px;font-size:13px" onclick="nbgToTech('${i.id}')">🔧</button>
-      <button class="del" style="color:var(--muted)" onclick="editStock('nbg','${i.id}')">✎</button>
-      <button class="del" onclick="delStock('nbg','${i.id}')">✕</button>
+      <div class="acts2">${i.qty>0?`
+        <button class="del txt" style="color:var(--green)" onclick="nbgReturn('${i.id}')">↩ стрій</button>
+        <button class="del txt" style="color:var(--amber)" title="Передати технікам" onclick="nbgToTech('${i.id}')">🔧</button>
+        <button class="del txt" style="color:var(--amber)" onclick="nbgToRem('${i.id}')">→ ремфонд</button>`:''}
+        <button class="del" style="color:var(--muted)" onclick="editStock('nbg','${i.id}')">✎</button>
+        <button class="del" onclick="delStock('nbg','${i.id}')">✕</button>
+      </div>
     </div>`).join('');
     return;
   }
@@ -2363,6 +2558,13 @@ function buildStockReport(date,noHeader){
     lines.push('НЕ БГ:');
     nbg.forEach(i=>lines.push(`•${i.name} - ${i.qty} ${u(i)}`));
   }
+  // ремфонд — лише якщо є борти; несправність у дужках (так само розбирається при прийманні позиції)
+  const rem=(S.rem||[]).filter(i=>i.qty>0).sort((a,b)=>a.name.localeCompare(b.name,'uk')||String(a.fault||'').localeCompare(String(b.fault||''),'uk'));
+  if(rem.length){
+    lines.push('');
+    lines.push('РЕМФОНД:');
+    rem.forEach(i=>{const f=cleanFault(i.fault);lines.push(`•${i.name} - ${i.qty} ${u(i)}${f?` (${f})`:''}`);});
+  }
   lines.push('');
   lines.push('БК:');
   lines.push('');
@@ -2984,7 +3186,7 @@ function renderStockLog(){
     log=log.filter(e=>e.ts>=from&&e.ts<to);
   }
   if(!log.length){el.innerHTML='<div class="empty">'+(fd?'За '+fmtDate(fd)+' рухів не було':'Лог порожній')+'</div>';return;}
-  const kindName={ammo:'БК',drones:'Дрон',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',flight:'Виліт'};
+  const kindName={ammo:'БК',drones:'Дрон',fuel:'Паливо',gear:'Майно',nbg:'Не БГ',rem:'Ремфонд',flight:'Виліт'};
   el.innerHTML=log.slice(0,100).map(e=>{
     const dt=new Date(e.ts);
     const ds=String(dt.getDate()).padStart(2,'0')+'.'+String(dt.getMonth()+1).padStart(2,'0')+' '+
