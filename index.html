@@ -80,6 +80,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
 .stat .v{font-size:26px;font-weight:700;font-family:var(--mono);color:var(--accent)}
 .stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+/* аналітика (v0.94): 4 головні картки по 2 в ряд, дрібні плитки — по 3 */
+#stats-cards{grid-template-columns:repeat(6,1fr)}
+#stats-cards .stat{grid-column:span 3}
+#stats-cards .stat.mini{grid-column:span 2;padding:9px 10px}
+#stats-cards .stat.mini .v{font-size:16px}
+#stats-cards .stat.mini .l{font-size:11px}
+#stats-seg button{padding:10px 4px;white-space:nowrap}
+.flt-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;background:none;border:0;color:var(--txt);font:inherit;font-size:15px;padding:9px 0;cursor:pointer}
+#flt-count{color:var(--accent);font-weight:700}
+#flt-chev{color:var(--muted);font-size:13px}
+#flt-card #flt-info{margin:0 0 8px}
+#flt-card #flt-info:empty{display:none}
+/* розділи, що згортаються тапом по заголовку */
+.sblk .sh{cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;-webkit-user-select:none}
+.sblk .sh::after{content:'▾';font-size:13px;letter-spacing:0;margin-left:8px}
+.sblk.closed .sh::after{content:'▸'}
+.sblk.closed .sbody{display:none}
 .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px}
 .seg button{flex:1;background:none;border:none;color:var(--muted);padding:10px;font-size:14px}
 .seg button.on{background:var(--accent-dk);color:var(--accent)}
@@ -100,7 +117,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 <body>
 
 <header>
-  <h1>Звіт <span>FPV</span><span class="ver">v0.93</span></h1>
+  <h1>Звіт <span>FPV</span><span class="ver">v0.94</span></h1>
   <button class="gear" onclick="openSettings()">⚙ Мої дані</button>
 </header>
 
@@ -253,6 +270,16 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
   <div id="stock-list"></div>
   <button class="btn sec" onclick="openIntake()">🔄 Приймання позиції (заїзд на зміну)</button>
   <div id="shift-info" class="note"></div>
+  <h2>Історія руху складу</h2>
+  <div class="card">
+    <button class="btn sec" style="margin-top:0" onclick="toggleStockLog()">Показати / сховати лог</button>
+    <div id="stock-log-wrap" style="display:none;margin-top:10px">
+      <label>Фільтр за днем (порожньо = всі)</label>
+      <input type="date" id="log-date" onchange="renderStockLog()" style="margin-bottom:8px">
+      <button class="btn sec" style="margin-top:0;margin-bottom:8px" onclick="document.getElementById('log-date').value='';renderStockLog()">Показати всі дні</button>
+      <div id="stock-log"></div>
+    </div>
+  </div>
 </section>
 
 <!-- ЗВІТ -->
@@ -269,6 +296,17 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <div id="r-loss-wrap"><label>Втрати противника</label><input id="r-losses" list="loss-opts" placeholder="уточнюються"></div>
   </div>
   <div id="r-out"></div>
+  <h2>Звіти за період</h2>
+  <div class="card">
+    <div class="row">
+      <div><label>Від</label><input type="date" id="exp-from"></div>
+      <div><label>До</label><input type="date" id="exp-to"></div>
+    </div>
+    <button class="btn" onclick="exportPeriod()">📋 Зібрати денні звіти</button>
+    <button class="btn" onclick="exportSummary()">📄 Зведення за період</button>
+    <button class="btn sec" onclick="exportCSV()">⬇ Експорт CSV (таблиця)</button>
+    <div id="exp-out" style="margin-top:12px"></div>
+  </div>
 </section>
 
 <!-- СТАТИСТИКА -->
@@ -286,83 +324,84 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div><label>До</label><input type="date" id="st-to" onchange="renderStats()"></div>
     </div>
   </div>
-  <div class="card" style="padding:10px 12px">
-    <div class="row">
-      <div><label>Дрон</label><select id="flt-drone" onchange="renderStats()"></select></div>
-      <div><label>БК</label><select id="flt-ammo" onchange="renderStats()"></select></div>
-    </div>
-    <div class="row">
-      <div><label>Результат</label><select id="flt-res" onchange="renderStats()"></select></div>
-    </div>
-    <div class="row">
-      <div><label>Втрати противника</label><select id="flt-loss" onchange="renderStats()"></select></div>
-    </div>
-    <div class="row">
-      <div><label>Тип вильоту</label><select id="flt-type" onchange="renderStats()">
-        <option value="">— усі типи —</option>
-        <option value="fiber">Оптоволокно</option>
-        <option value="radio">Радіо</option>
-        <option value="bomber">Бомбер</option>
-      </select></div>
-      <div><label>Ждун</label><select id="flt-zhdun" onchange="renderStats()">
-        <option value="">— усі —</option>
-        <option value="yes">Тільки ждуни</option>
-        <option value="no">Без ждунів</option>
-      </select></div>
+  <!-- фільтри згорнуті в одну кнопку; активні видно рядком нижче -->
+  <div class="card" id="flt-card" style="padding:4px 12px">
+    <button class="flt-toggle" id="flt-toggle" onclick="toggleStatFilters()"><span>🔍 Фільтри<span id="flt-count"></span></span><span class="chev" id="flt-chev">▾</span></button>
+    <div id="flt-body" style="display:none">
+      <div class="row">
+        <div><label>Дрон</label><select id="flt-drone" onchange="renderStats()"></select></div>
+        <div><label>БК</label><select id="flt-ammo" onchange="renderStats()"></select></div>
+      </div>
+      <div class="row">
+        <div><label>Результат</label><select id="flt-res" onchange="renderStats()"></select></div>
+      </div>
+      <div class="row">
+        <div><label>Втрати противника</label><select id="flt-loss" onchange="renderStats()"></select></div>
+      </div>
+      <div class="row">
+        <div><label>Тип вильоту</label><select id="flt-type" onchange="renderStats()">
+          <option value="">— усі типи —</option>
+          <option value="fiber">Оптоволокно</option>
+          <option value="radio">Радіо</option>
+          <option value="bomber">Бомбер</option>
+        </select></div>
+        <div><label>Ждун</label><select id="flt-zhdun" onchange="renderStats()">
+          <option value="">— усі —</option>
+          <option value="yes">Тільки ждуни</option>
+          <option value="no">Без ждунів</option>
+        </select></div>
+      </div>
     </div>
     <div id="flt-info" class="note"></div>
   </div>
   <div class="stats" id="stats-cards"></div>
   <div class="note" id="dur-note" style="margin:6px 2px 0"></div>
-  <div id="cmp-wrap" style="display:none">
-    <h2>Порівняння з попереднім періодом</h2>
-    <div id="cmp-box"></div>
+  <!-- розділи згортаються тапом по заголовку; застосунок памʼятає, що згорнуто -->
+  <div class="sblk" data-sec="cmp" id="cmp-wrap" style="display:none">
+    <h2 class="sh" onclick="toggleSec('cmp')">Порівняння з попереднім періодом</h2>
+    <div class="sbody"><div id="cmp-box"></div></div>
   </div>
-  <h2>Вильоти по днях</h2>
-  <div class="card"><canvas id="chart" height="150"></canvas></div>
-  <h2>% влучань по тижнях</h2>
-  <div class="card"><canvas id="chart-weeks" height="150"></canvas>
-  <div class="note" id="weeks-note"></div></div>
-  <h2>Розподіл по годинах доби</h2>
-  <div class="card"><canvas id="chart-hours" height="150"></canvas>
-  <div class="note" id="hours-note"></div></div>
-  <h2>Втрати противника</h2>
-  <div class="stats" id="loss-cards"></div>
-  <div id="stats-losses" style="margin-top:10px"></div>
-  <h2>Результати</h2>
-  <div id="stats-res"></div>
-  <h2>Наліт по дронах (вильотів / влучань)</h2>
-  <div id="stats-topdrone"></div>
-  <h2>Ефективність по БК (% влучань)</h2>
-  <div id="stats-ammoeff"></div>
-  <h2>Відстань до цілі (% влучань)</h2>
-  <div id="stats-dist"></div>
-  <h2>Витрати БК за період</h2>
-  <div id="stats-ammo"></div>
-  <h2>Списано дронів за період</h2>
-  <div id="stats-drones"></div>
-
-  <h2>Експорт звітів за період</h2>
-  <div class="card">
-    <div class="row">
-      <div><label>Від</label><input type="date" id="exp-from"></div>
-      <div><label>До</label><input type="date" id="exp-to"></div>
-    </div>
-    <button class="btn" onclick="exportPeriod()">📋 Зібрати денні звіти</button>
-    <button class="btn" onclick="exportSummary()">📄 Зведення за період</button>
-    <button class="btn sec" onclick="exportCSV()">⬇ Експорт CSV (таблиця)</button>
-    <div id="exp-out" style="margin-top:12px"></div>
+  <div class="sblk" data-sec="res">
+    <h2 class="sh" onclick="toggleSec('res')">Результати</h2>
+    <div class="sbody"><div id="stats-res"></div></div>
   </div>
-
-  <h2>Історія руху складу</h2>
-  <div class="card">
-    <button class="btn sec" style="margin-top:0" onclick="toggleStockLog()">Показати / сховати лог</button>
-    <div id="stock-log-wrap" style="display:none;margin-top:10px">
-      <label>Фільтр за днем (порожньо = всі)</label>
-      <input type="date" id="log-date" onchange="renderStockLog()" style="margin-bottom:8px">
-      <button class="btn sec" style="margin-top:0;margin-bottom:8px" onclick="document.getElementById('log-date').value='';renderStockLog()">Показати всі дні</button>
-      <div id="stock-log"></div>
-    </div>
+  <div class="sblk" data-sec="loss">
+    <h2 class="sh" onclick="toggleSec('loss')">Втрати противника</h2>
+    <div class="sbody"><div id="stats-losses"></div><div class="note" id="loss-sum" style="margin:2px 2px 0"></div></div>
+  </div>
+  <div class="sblk" data-sec="drone">
+    <h2 class="sh" onclick="toggleSec('drone')">Наліт по дронах (вильотів / влучань)</h2>
+    <div class="sbody"><div id="stats-topdrone"></div></div>
+  </div>
+  <div class="sblk" data-sec="ammoeff">
+    <h2 class="sh" onclick="toggleSec('ammoeff')">Ефективність по БК (% влучань)</h2>
+    <div class="sbody"><div id="stats-ammoeff"></div></div>
+  </div>
+  <div class="sblk" data-sec="dist">
+    <h2 class="sh" onclick="toggleSec('dist')">Відстань до цілі (% влучань)</h2>
+    <div class="sbody"><div id="stats-dist"></div></div>
+  </div>
+  <div class="sblk" data-sec="ammo">
+    <h2 class="sh" onclick="toggleSec('ammo')">Витрати БК за період</h2>
+    <div class="sbody"><div id="stats-ammo"></div></div>
+  </div>
+  <div class="sblk" data-sec="drones">
+    <h2 class="sh" onclick="toggleSec('drones')">Списано дронів за період</h2>
+    <div class="sbody"><div id="stats-drones"></div></div>
+  </div>
+  <div class="sblk" data-sec="days">
+    <h2 class="sh" onclick="toggleSec('days')">Вильоти по днях</h2>
+    <div class="sbody"><div class="card"><canvas id="chart" height="150"></canvas></div></div>
+  </div>
+  <div class="sblk" data-sec="weeks">
+    <h2 class="sh" onclick="toggleSec('weeks')">% влучань по тижнях</h2>
+    <div class="sbody"><div class="card"><canvas id="chart-weeks" height="150"></canvas>
+    <div class="note" id="weeks-note"></div></div></div>
+  </div>
+  <div class="sblk" data-sec="hours">
+    <h2 class="sh" onclick="toggleSec('hours')">Розподіл по годинах доби</h2>
+    <div class="sbody"><div class="card"><canvas id="chart-hours" height="150"></canvas>
+    <div class="note" id="hours-note"></div></div></div>
   </div>
 </section>
 
@@ -2828,6 +2867,25 @@ function shareReport(){
 }
 
 /* ===== stats ===== */
+// стан екрана (згорнуті розділи аналітики, відкриті фільтри) — окремо від даних, у бекап не йде
+const UI_KEY=KEY+'-ui';
+let uiState=(()=>{try{const o=JSON.parse(localStorage.getItem(UI_KEY));return o&&typeof o==='object'&&!Array.isArray(o)?o:{};}catch(e){return {};}})();
+function saveUi(){try{localStorage.setItem(UI_KEY,JSON.stringify(uiState));}catch(e){}}
+function applySecState(){
+  const closed=uiState.closed&&typeof uiState.closed==='object'?uiState.closed:{};
+  document.querySelectorAll('.sblk[data-sec]').forEach(b=>b.classList.toggle('closed',!!closed[b.dataset.sec]));
+  const fo=!!uiState.fltOpen,fb=document.getElementById('flt-body'),fc=document.getElementById('flt-chev');
+  if(fb)fb.style.display=fo?'block':'none';
+  if(fc)fc.textContent=fo?'▴':'▾';
+}
+function toggleSec(sec){
+  if(!uiState.closed||typeof uiState.closed!=='object')uiState.closed={};
+  if(uiState.closed[sec])delete uiState.closed[sec];else uiState.closed[sec]=1;
+  saveUi();applySecState();
+  // графік, що малювався в згорнутому розділі, має нульову ширину — перемальовуємо
+  if(!uiState.closed[sec]&&document.querySelector(`.sblk[data-sec="${sec}"] canvas`))renderStats();
+}
+function toggleStatFilters(){uiState.fltOpen=!uiState.fltOpen;saveUi();applySecState();}
 let statDays=7;
 document.getElementById('stats-seg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
@@ -2863,7 +2921,7 @@ function renderGroups(elId,section,entries){
     const open=openGroups[section]===k;
     // підпис — окремим рядком на всю ширину, щоб не стискався поруч із цифрами
     return `<div class="item" onclick="toggleGroup('${section}',${idx})" style="cursor:pointer;flex-wrap:wrap">
-      <div class="nm">${esc(k)}</div>
+      <div class="nm" style="min-width:50%">${esc(k)}</div>
       <div class="qty" style="min-width:auto">${o.right}</div>
       <div style="color:var(--muted);font-size:13px;width:18px;text-align:center">${open?'▲':'▼'}</div>
       ${o.sub?`<div style="flex-basis:100%;font-size:12.5px;color:var(--muted);margin-top:-4px">${esc(o.sub)}</div>`:''}
@@ -2916,6 +2974,7 @@ function fillStatsFilters(pool){
 // «влучання в район цілі» рахується як влучання, але окремо показуємо, скільки таких серед влучань
 function isAreaHit(f){const r=String(f.result||'');return /влуч|ураж/i.test(r)&&/район/i.test(r);}
 function renderStats(){
+  applySecState();
   let pool, periodLabel='';
   if(statDays==='custom'){
     const fv=document.getElementById('st-from')?.value||'';
@@ -2941,6 +3000,8 @@ function renderStats(){
       ?(periodLabel?perStr+'<br>':'')+`Фільтр: ${esc(act.join(' · '))} — ${arr.length} з ${pool.length} вильотів (<b style="color:var(--accent)">${pool.length?Math.round(arr.length/pool.length*100):0}%</b>) <a href="#" onclick="clearStatsFilter();return false;" style="color:var(--accent)">скинути</a>`
       :perStr;
   }
+  const fcnt=document.getElementById('flt-count');
+  if(fcnt)fcnt.textContent=flt.labels.length?' · '+flt.labels.length:'';
   const hit=arr.filter(f=>/влуч|ураж/i.test(f.result)).length;
   const areaHit=arr.filter(isAreaHit).length;
   const lost=arr.filter(f=>f.lost).length;
@@ -2958,7 +3019,7 @@ function renderStats(){
     if(f.zhdun){zdurs.push({d,f});return;}   // ждуни рахуємо окремо
     if(d<=180)durs.push({d,f});
   });
-  const hm=m=>Math.floor(m/60)+' год '+String(m%60).padStart(2,'0')+' хв';
+  const hm=m=>m<60?m+' хв':Math.floor(m/60)+' год '+String(m%60).padStart(2,'0')+' хв'; // до години — просто «20 хв»
   const totMin=durs.reduce((s,x)=>s+x.d,0);
   const avgMin=durs.length?Math.round(totMin/durs.length):0;
   const totStr=totMin?hm(totMin):'—';
@@ -2967,22 +3028,46 @@ function renderStats(){
   const lossDurs=durs.filter(x=>/обрив|втрата керування|реб/i.test(x.f.result)).map(x=>x.d);
   const avg=a=>a.length?Math.round(a.reduce((s,v)=>s+v,0)/a.length):null;
   const ah=avg(hitDurs),al=avg(lossDurs);
+  // втрати противника: 200 / 300 і скільки вильотів з втратами
+  let l200=0,l300=0,withLoss=0;
+  const byLoss={};
+  arr.forEach(f=>{
+    const raw=(f.loss||'').trim();
+    if(!raw||/^уточн/i.test(raw))return;
+    withLoss++;
+    const p=parseLoss(raw);
+    l200+=p[200];l300+=p[300];
+    // кожна складова окремим рядком
+    const parts=[];
+    if(p[200])parts.push(`${p[200]}х200`);
+    if(p[300])parts.push(`${p[300]}х300`);
+    p.other.forEach(o=>parts.push(cap(o.toLowerCase())));
+    parts.forEach(k=>{
+      const key=/^\d+х(200|300)$/.test(k)?('Жива сила '+k.replace(/^\d+/,'')):k;
+      if(!byLoss[key])byLoss[key]={n:0,fl:[],qty:0};
+      byLoss[key].n++;
+      const mq=k.match(/^(\d+)х/);
+      byLoss[key].qty+=mq?parseInt(mq[1]):1;
+      if(!byLoss[key].fl.includes(f))byLoss[key].fl.push(f);
+    });
+  });
   const dl=arr.filter(f=>f.distKm>0).map(f=>f.distKm);   // відстані до цілі (тільки де вказано)
   const kml=arr.map(flightKm).filter(v=>v!==null);       // кілометраж вильотів (де є з чого рахувати)
+  // 4 головні картки, далі — дрібні плитки (порядок і тексти карток використовують тести)
   document.getElementById('stats-cards').innerHTML=`
     <div class="stat"><div class="v">${arr.length}</div><div class="l">вильотів${shareStr}</div></div>
     <div class="stat"><div class="v">${arr.length?Math.round(hit/arr.length*100):0}%</div><div class="l">влучань (${hit}/${arr.length})${areaHit?`<br>з них у район: ${Math.round(areaHit/arr.length*100)}% (${areaHit})`:''}</div></div>
-    <div class="stat"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
+    <div class="stat"><div class="v">${l200+l300}</div><div class="l">уражено ос.${l200+l300?` (${[l200?l200+'х200':'',l300?l300+'х300':''].filter(Boolean).join(' · ')})`:''}</div></div>
     <div class="stat"><div class="v">${lost}</div><div class="l">дронів списано</div></div>
-    <div class="stat"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ${zdurs.length?' (без ждунів)':''}</div></div>
-    <div class="stat"><div class="v" style="font-size:20px">${totStr}</div><div class="l">сумарний наліт${zdurs.length?' (без ждунів)':''}</div></div>`+
+    <div class="stat mini"><div class="v">${ammoTotal}</div><div class="l">БК витрачено</div></div>
+    <div class="stat mini"><div class="v">${avgMin?avgMin+' хв':'—'}</div><div class="l">середній політ${zdurs.length?' (без ждунів)':''}</div></div>
+    <div class="stat mini"><div class="v">${totStr}</div><div class="l">сумарний наліт${zdurs.length?' (без ждунів)':''}</div></div>`+
     (zdurs.length?`
-    <div class="stat"><div class="v">${zdurs.length}</div><div class="l">вильотів ждуном</div></div>
-    <div class="stat"><div class="v" style="font-size:20px">${hm(zTot)}</div><div class="l">час ждуном на позиції</div></div>`:'')+
+    <div class="stat mini"><div class="v">${zdurs.length}</div><div class="l">ждунів · ${hm(zTot)} на позиції</div></div>`:'')+
     (dl.length?`
-    <div class="stat"><div class="v" style="font-size:20px">${(dl.reduce((x,y)=>x+y,0)/dl.length).toFixed(1)} км</div><div class="l">середня відстань до цілі · макс ${Math.max(...dl).toFixed(1)} км</div></div>`:'')+
+    <div class="stat mini"><div class="v">${(dl.reduce((x,y)=>x+y,0)/dl.length).toFixed(1)} км</div><div class="l">середня відстань до цілі · макс ${Math.max(...dl).toFixed(1)} км</div></div>`:'')+
     (kml.length?`
-    <div class="stat"><div class="v" style="font-size:20px">${fmtKm(kml.reduce((x,y)=>x+y,0))} км</div><div class="l">кілометраж (по прямій)${kml.length<arr.length?` · без відстані ${arr.length-kml.length} вил.`:''}</div></div>`:'');
+    <div class="stat mini"><div class="v">${fmtKm(kml.reduce((x,y)=>x+y,0))} км</div><div class="l">кілометраж (по прямій)${kml.length<arr.length?` · без відстані ${arr.length-kml.length} вил.`:''}</div></div>`:'');
   const durNote=document.getElementById('dur-note');
   if(durNote){
     const p1=(ah!==null&&al!==null)?`Середній політ при влучанні: ${ah} хв · при обриві/втраті керування: ${al} хв`:'';
@@ -3027,35 +3112,9 @@ function renderStats(){
   });
   renderGroups('stats-res','res',resEntries);
 
-  // === Втрати противника ===
-  let l200=0,l300=0,withLoss=0;
-  const byLoss={};
-  arr.forEach(f=>{
-    const raw=(f.loss||'').trim();
-    if(!raw||/^уточн/i.test(raw))return;
-    withLoss++;
-    const p=parseLoss(raw);
-    l200+=p[200];l300+=p[300];
-    // кожна складова окремим рядком
-    const parts=[];
-    if(p[200])parts.push(`${p[200]}х200`);
-    if(p[300])parts.push(`${p[300]}х300`);
-    p.other.forEach(o=>parts.push(cap(o.toLowerCase())));
-    parts.forEach(k=>{
-      const key=/^\d+х(200|300)$/.test(k)?('Жива сила '+k.replace(/^\d+/,'')):k;
-      if(!byLoss[key])byLoss[key]={n:0,fl:[],qty:0};
-      byLoss[key].n++;
-      const mq=k.match(/^(\d+)х/);
-      byLoss[key].qty+=mq?parseInt(mq[1]):1;
-      if(!byLoss[key].fl.includes(f))byLoss[key].fl.push(f);
-    });
-  });
-  const lc=document.getElementById('loss-cards');
-  if(lc)lc.innerHTML=`
-    <div class="stat"><div class="v">${l200}</div><div class="l">200 (безповоротні)</div></div>
-    <div class="stat"><div class="v">${l300}</div><div class="l">300 (санітарні)</div></div>
-    <div class="stat"><div class="v">${withLoss}</div><div class="l">вильотів з втратами${arr.length?' · '+Math.round(withLoss/arr.length*100)+'%':''}</div></div>
-    <div class="stat"><div class="v">${l200+l300}</div><div class="l">разом особового складу</div></div>`;
+  // === Втрати противника: рядки (тап — список вильотів) + скільки вильотів з втратами; 200/300 разом — у картці вгорі ===
+  const lsum=document.getElementById('loss-sum');
+  if(lsum)lsum.textContent=withLoss?`Вильотів з втратами: ${withLoss} — ${arr.length?Math.round(withLoss/arr.length*100):0}% від усіх.`:'';
   renderGroups('stats-losses','loss',
     Object.entries(byLoss).sort((a,b)=>b[1].qty-a[1].qty).map(([k,o])=>{
       const isPer=/^Жива сила/.test(k);
@@ -3089,9 +3148,10 @@ function renderStats(){
       const shr=arr.length?Math.round(s.fl/arr.length*100):0;
       const dd=s.list.filter(f=>f.distKm>0).map(f=>f.distKm);
       const km=s.list.map(flightKm).filter(v=>v!==null);
-      const sub=[dd.length?`відстань: сер. ${(dd.reduce((x,y)=>x+y,0)/dd.length).toFixed(1)} · макс ${Math.max(...dd).toFixed(1)} км`:'',
+      // праворуч — лише «вильотів / влучань», решта — рядком нижче (інакше назва дрона ламається по буквах)
+      const sub=[`${pct}% влучань · ${shr}% нальоту`,dd.length?`відстань: сер. ${(dd.reduce((x,y)=>x+y,0)/dd.length).toFixed(1)} · макс ${Math.max(...dd).toFixed(1)} км`:'',
         km.length?`пролетів ${fmtKm(km.reduce((x,y)=>x+y,0))} км`:''].filter(Boolean).join(' · ');
-      return [n,{fl:s.list,right:`${s.fl} / ${s.hit} <span style="color:var(--muted);font-size:13px">(${pct}% влуч · ${shr}% нальоту)</span>`,sub}];
+      return [n,{fl:s.list,right:`${s.fl} / ${s.hit}`,sub}];
     }));
 
   // Відстань до цілі: % влучань за діапазонами (вильоти без відстані не враховуються)
@@ -3148,12 +3208,12 @@ function renderCompare(pred){
   const rng=(a,b)=>a===b?fmtDate(a):fmtDate(a)+'–'+fmtDate(b);
   // [назва, зараз, було, режим, «більше = краще»: true / false / null (нейтрально)]
   const rows=[
-    ['Вильотів',cur.n,prv.n,'pct',true],
+    ['Вильотів',cur.n,prv.n,'n',true],
     ['Влучань',cur.hitPct,prv.hitPct,'pp',true],
-    ['200',cur.l200,prv.l200,'pct',true],
-    ['300',cur.l300,prv.l300,'pct',true],
-    ['БК витрачено',cur.bk,prv.bk,'pct',null],
-    ['Дронів списано',cur.lost,prv.lost,'pct',null],
+    ['200',cur.l200,prv.l200,'n',true],
+    ['300',cur.l300,prv.l300,'n',true],
+    ['БК витрачено',cur.bk,prv.bk,'n',null],
+    ['Дронів списано',cur.lost,prv.lost,'n',null],
   ];
   const row=([label,c,p,mode,goodUp])=>{
     const show=v=>v===null?'—':(mode==='pp'?v+'%':v);
@@ -3161,7 +3221,11 @@ function renderCompare(pred){
     if(c!==null&&p!==null){
       if(mode==='pp'){const d=c-p;ch=d===0?'без змін':(d>0?'▲ +'+d:'▼ −'+Math.abs(d))+' п.п.';}
       else if(p===0){ch=c===0?'—':'▲ нове';}
-      else{const d=Math.round((c-p)/p*100);ch=d===0?'без змін':(d>0?'▲ +'+d+'%':'▼ −'+Math.abs(d)+'%');}
+      else{
+        // різниця штуками; відсоток — лише коли «було» хоча б 10 (на малих числах «+1300%» лише лякає)
+        const d=c-p,pc=Math.round(Math.abs(d)/p*100);
+        ch=d===0?'без змін':(d>0?'▲ +':'▼ −')+Math.abs(d)+(p>=10&&pc?` (${d>0?'+':'−'}${pc}%)`:'');
+      }
       if(goodUp!==null&&c!==p)col=(c>p)===goodUp?'var(--green)':'var(--red)';
     }
     return `<div class="item" style="padding:9px 12px"><div class="nm" style="font-size:14px">${label}</div>
@@ -3180,24 +3244,27 @@ function drawChart(arr,days,endISO){
   const W=cv.width=cv.clientWidth*devicePixelRatio,H=cv.height=150*devicePixelRatio;
   const ctx=cv.getContext('2d');ctx.clearRect(0,0,W,H);
   const now=new Date(endISO||todayISO());
-  const counts=[],labels=[];
+  const counts=[],dd=[],mm=[];
   for(let i=days-1;i>=0;i--){
     const d=new Date(now.getTime()-i*864e5);
     const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     counts.push(arr.filter(f=>f.date===iso).length);
-    labels.push(String(d.getDate()).padStart(2,'0'));
+    dd.push(String(d.getDate()).padStart(2,'0'));mm.push(String(d.getMonth()+1).padStart(2,'0'));
   }
   const max=Math.max(1,...counts);
   const pad=8*devicePixelRatio,bw=(W-pad*2)/counts.length;
   const topPad=16*devicePixelRatio;
+  // дата — не частіше, ніж раз на ~26 px (рахуємо від останнього дня, щоб він завжди був підписаний);
+  // якщо місця вистачає — з місяцем
+  const cssBw=bw/devicePixelRatio,step=Math.max(1,Math.ceil(26/Math.max(cssBw,0.1))),longLbl=step*cssBw>=38;
   ctx.fillStyle='#8b94a0';ctx.font=(10*devicePixelRatio)+'px monospace';ctx.textAlign='center';
   counts.forEach((c,i)=>{
     const h=(H-30*devicePixelRatio-topPad)*(c/max);
     const x=pad+i*bw;
     ctx.fillStyle=c?'#b6c46a':'#2a323d';
     ctx.fillRect(x+bw*.15,H-20*devicePixelRatio-h,bw*.7,Math.max(h,2*devicePixelRatio));
-    if(days<=31){ctx.fillStyle='#8b94a0';ctx.fillText(labels[i],x+bw/2,H-6*devicePixelRatio);}
-    if(c){ctx.fillStyle='#d9dfe6';ctx.fillText(c,x+bw/2,H-26*devicePixelRatio-h);}
+    if((counts.length-1-i)%step===0){ctx.fillStyle='#8b94a0';ctx.fillText(longLbl?dd[i]+'.'+mm[i]:dd[i],x+bw/2,H-6*devicePixelRatio);}
+    if(c&&ctx.measureText(String(c)).width<=bw*1.05){ctx.fillStyle='#d9dfe6';ctx.fillText(c,x+bw/2,H-26*devicePixelRatio-h);}
   });
 }
 
@@ -3335,6 +3402,8 @@ function drawWeeksChart(arr){
   if(note)note.textContent='Стовпець — % влучань за тиждень (від понеділка), число знизу — вильотів.';
   const pad=8*devicePixelRatio,topPad=16*devicePixelRatio;
   const bw=(W-pad*2)/keys.length;
+  // багато тижнів (за весь час) — підписуємо не кожен, щоб не злипалось
+  const step=Math.max(1,Math.ceil(36/Math.max(bw/devicePixelRatio,0.1)));
   ctx.font=(9.5*devicePixelRatio)+'px monospace';ctx.textAlign='center';
   keys.forEach((k,i)=>{
     const o=wk[k];
@@ -3343,12 +3412,13 @@ function drawWeeksChart(arr){
     const x=pad+i*bw;
     ctx.fillStyle=pct>=60?'#7fbf7a':pct>=35?'#b6c46a':'#d96b5a';
     ctx.fillRect(x+bw*.18,H-32*devicePixelRatio-h,bw*.64,Math.max(h,2*devicePixelRatio));
-    ctx.fillStyle='#d9dfe6';
-    ctx.fillText(pct+'%',x+bw/2,H-36*devicePixelRatio-h);
-    ctx.fillStyle='#8b94a0';
-    const[y,m,d]=k.split('-');
-    ctx.fillText(d+'.'+m,x+bw/2,H-18*devicePixelRatio);
-    ctx.fillText(o.n,x+bw/2,H-6*devicePixelRatio);
+    if(ctx.measureText(pct+'%').width<=bw*1.05){ctx.fillStyle='#d9dfe6';ctx.fillText(pct+'%',x+bw/2,H-36*devicePixelRatio-h);}
+    if((keys.length-1-i)%step===0){
+      ctx.fillStyle='#8b94a0';
+      const[y,m,d]=k.split('-');
+      ctx.fillText(d+'.'+m,x+bw/2,H-18*devicePixelRatio);
+      ctx.fillText(o.n,x+bw/2,H-6*devicePixelRatio);
+    }
   });
 }
 function drawHoursChart(arr){
